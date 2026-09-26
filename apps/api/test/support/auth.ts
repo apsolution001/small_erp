@@ -7,10 +7,14 @@ import {
 } from '@ekaro/contracts';
 import { type NestExpressApplication } from '@nestjs/platform-express';
 import { type Response } from 'supertest';
-import { REFRESH_COOKIE } from '../../src/modules/auth/sessions/refresh-cookie.js';
+import { refreshCookieName } from '../../src/modules/auth/sessions/refresh-cookie.js';
 import { activeGstin } from '../factories/gstin.js';
 import { TEST_PASSWORD, uniqueEmail } from '../factories/users.js';
 import { http } from './app.js';
+import { loadTestEnv } from './test-env.js';
+
+/** The refresh cookie's name in e2e runs (Secure, so `__Secure-ekaro_refresh`). */
+export const REFRESH_COOKIE = refreshCookieName(loadTestEnv());
 
 /** A signed-up owner: the token response, the refresh cookie and the credentials. */
 export interface SignedUp {

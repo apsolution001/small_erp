@@ -13,6 +13,10 @@ import {
 
 const utf8 = new TextEncoder();
 
+/** bcrypt ignores everything after byte 72, so no password may be longer. */
+export const PASSWORD_MAX_BYTES = 72;
+const withinBcryptLimit = (p: string): boolean => utf8.encode(p).length <= PASSWORD_MAX_BYTES;
+
 // Request bodies are strict: an unknown key is a 422, never silently dropped.
 
 /**
@@ -22,7 +26,7 @@ const utf8 = new TextEncoder();
 export const passwordSchema = z
   .string()
   .min(10, 'Use at least 10 characters')
-  .refine((p) => utf8.encode(p).length <= 72, 'Use at most 72 bytes');
+  .refine(withinBcryptLimit, 'Use at most 72 bytes');
 
 export const fullNameSchema = text(120);
 
@@ -37,10 +41,14 @@ export const signupSchema = z.strictObject({
 });
 export type Signup = z.infer<typeof signupSchema>;
 
-/** `POST /auth/login`. The password policy is not applied here: old passwords must still work. */
+/**
+ * `POST /auth/login`. The new-password policy is not applied (old passwords must still work),
+ * but a password over 72 UTF-8 bytes is a 422: no stored password can be longer, and bcrypt would
+ * otherwise accept any suffix after byte 72.
+ */
 export const loginSchema = z.strictObject({
   email: emailSchema,
-  password: z.string().min(1).max(1024),
+  password: z.string().min(1).refine(withinBcryptLimit, 'Use at most 72 bytes'),
   tenantId: uuidSchema.optional(),
 });
 export type Login = z.infer<typeof loginSchema>;

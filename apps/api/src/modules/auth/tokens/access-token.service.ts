@@ -1,3 +1,4 @@
+import { uuidv7 } from '@ekaro/core';
 import { uuidSchema } from '@ekaro/contracts';
 import { Injectable } from '@nestjs/common';
 import { JwtService, TokenExpiredError } from '@nestjs/jwt';
@@ -21,17 +22,30 @@ export const SELECTION_TOKEN_TTL_SECONDS = 300;
 const SELECTION_PURPOSE = 'tenant_selection';
 const ALGORITHM = 'HS256';
 
+/** Seconds since the epoch. The JWT library checks it; the schema makes it mandatory. */
+const epochSeconds = z.number().int().positive();
+
 const accessPayloadSchema = z.object({
   sub: uuidSchema,
   tid: uuidSchema,
   mid: uuidSchema,
   sid: uuidSchema,
+  exp: epochSeconds,
 });
 
 const selectionPayloadSchema = z.object({
   sub: uuidSchema,
+  jti: uuidSchema,
   purpose: z.literal(SELECTION_PURPOSE),
+  exp: epochSeconds,
 });
+
+/** A verified tenant-selection token: its user, and its id and expiry for single use. */
+export interface SelectionClaims {
+  readonly userId: string;
+  readonly tokenId: string;
+  readonly expiresAt: Date;
+}
 
 /**
  * Signs and verifies the short-lived JWTs: access tokens (15 minutes, audience `JWT_AUDIENCE`)
@@ -82,6 +96,7 @@ export class AccessTokenService {
       {
         algorithm: ALGORITHM,
         subject: userId,
+        jwtid: uuidv7(),
         issuer: this.env.JWT_ISSUER,
         audience: this.selectionAudience,
         expiresIn: SELECTION_TOKEN_TTL_SECONDS,
@@ -89,13 +104,14 @@ export class AccessTokenService {
     );
   }
 
-  /** The user a selection token was issued to. */
-  async verifySelection(token: string): Promise<string> {
+  /** The user a selection token was issued to, and the token's id and expiry. */
+  async verifySelection(token: string): Promise<SelectionClaims> {
     const payload = selectionPayloadSchema.safeParse(
       await this.verify(token, this.selectionAudience),
     );
     if (!payload.success) throw invalidToken();
-    return payload.data.sub;
+    const { sub, jti, exp } = payload.data;
+    return { userId: sub, tokenId: jti, expiresAt: new Date(exp * 1000) };
   }
 
   private async verify(token: string, audience: string): Promise<unknown> {

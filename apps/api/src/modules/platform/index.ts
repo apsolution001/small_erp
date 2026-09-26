@@ -1,4 +1,5 @@
 /** Public surface of the platform module. */
+export { lookupGstinOrUnavailable } from './gsp/gsp-lookup.js';
 export { GSP_PROVIDER, type GspProvider } from './gsp/gsp-provider.js';
 export { PlatformModule } from './platform.module.js';
 export {

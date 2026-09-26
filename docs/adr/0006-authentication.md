@@ -1,6 +1,6 @@
 # 0006 — Authentication: JWT access + rotating refresh tokens
 
-**Status:** Accepted · 2026-09-26
+**Status:** Accepted · 2026-09-26 · session lifetimes, switch-tenant and the cookie name amended by [ADR 0016](0016-session-hardening.md)
 
 ## Decision
 

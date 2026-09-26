@@ -11,6 +11,8 @@ const port = z.coerce.number().int().min(1).max(65_535);
 const positiveInt = z.coerce.number().int().positive();
 
 const EXAMPLE_SECRET_PREFIX = 'change-me';
+/** GSP adapters that answer without a real GST portal: refused in production. */
+const TEST_ONLY_GSP_PROVIDERS: ReadonlySet<string> = new Set(['mock']);
 
 const envSchema = z
   .object({
@@ -36,7 +38,13 @@ const envSchema = z
     JWT_ACCESS_TTL_SECONDS: positiveInt.default(900),
     JWT_ISSUER: z.string().min(1),
     JWT_AUDIENCE: z.string().min(1),
-    REFRESH_TOKEN_TTL_DAYS: positiveInt.default(30),
+    /**
+     * Idle session lifetime: a refresh token expires this long after it was issued, so a session
+     * unused for this long ends. Rotation never extends a session past its absolute lifetime.
+     */
+    SESSION_IDLE_DAYS: positiveInt.max(365).default(7),
+    /** Absolute session lifetime from login (ADR 0016): the user must sign in again after it. */
+    SESSION_ABSOLUTE_DAYS: positiveInt.max(365).default(30),
     /**
      * `Secure` flag of the refresh cookie. Browsers drop Secure cookies over plain http, so local
      * development over http sets it to false. Always true in production.
@@ -47,13 +55,15 @@ const envSchema = z
       error: 'must be base64 that decodes to exactly 32 bytes',
     }),
 
+    /** GST Suvidha Provider adapter. `mock` is refused in production. */
     GSP_PROVIDER: z.enum(['mock']),
 
     /**
      * Reverse proxies in front of the API (Express `trust proxy` hop count). The client IP used for
      * rate limiting is taken this many hops back in `X-Forwarded-For`; 0 means the socket address.
+     * Defaults to 0, but production must set it explicitly (a wrong value breaks rate limiting).
      */
-    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).optional(),
     /** Requests per minute per client IP on each auth route (security standard). */
     THROTTLE_AUTH_PER_MINUTE: positiveInt.default(20),
     /** Login and signup attempts per minute per email address. */
@@ -80,9 +90,32 @@ const envSchema = z
         message: 'must be true in production',
       });
     }
-  });
+    // The mock answers any well-formed GSTIN as a registered business: never in production.
+    if (env.NODE_ENV === 'production' && TEST_ONLY_GSP_PROVIDERS.has(env.GSP_PROVIDER)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['GSP_PROVIDER'],
+        message: 'the mock GSP must not be used in production',
+      });
+    }
+    if (env.NODE_ENV === 'production' && env.TRUST_PROXY_HOPS === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['TRUST_PROXY_HOPS'],
+        message: 'must be set explicitly in production (the number of proxies in front of the API)',
+      });
+    }
+    if (env.SESSION_IDLE_DAYS > env.SESSION_ABSOLUTE_DAYS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['SESSION_IDLE_DAYS'],
+        message: 'must not exceed SESSION_ABSOLUTE_DAYS',
+      });
+    }
+  })
+  .transform((env) => ({ ...env, TRUST_PROXY_HOPS: env.TRUST_PROXY_HOPS ?? 0 }));
 
-export type Env = z.infer<typeof envSchema>;
+export type Env = z.output<typeof envSchema>;
 export type RawEnv = Readonly<Record<string, string | undefined>>;
 
 export interface EnvIssue {

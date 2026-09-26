@@ -36,6 +36,20 @@
       "when": 1790402767680,
       "tag": "0004_auth_access_masters_security",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790404842880,
+      "tag": "0005_sec_sessions_lockout",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790404878211,
+      "tag": "0006_sec_sessions_lockout_security",
+      "breakpoints": true
     }
   ]
 }

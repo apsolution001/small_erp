@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { isUniqueViolation } from '../../infra/db/pg-errors.js';
+import { serializeError } from '../../infra/logging/error-serializer.js';
 import { DomainError, type FieldError, ValidationError } from './domain-error.js';
 
 export const PROBLEM_CONTENT_TYPE = 'application/problem+json';
@@ -110,7 +111,8 @@ export class ProblemDetailsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const body = toProblemDetails(exception);
     if (body.status >= 500) {
-      this.logger.error({ err: exception }, 'Unhandled error');
+      // Never the raw error: a failed query carries its SQL and parameters (security standard).
+      this.logger.error({ err: serializeError(exception) }, 'Unhandled error');
     }
 
     const http = host.switchToHttp();
