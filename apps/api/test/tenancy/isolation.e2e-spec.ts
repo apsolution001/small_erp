@@ -24,6 +24,11 @@ const TENANT_TABLES = [
   'document_series',
 ] as const;
 
+/** Business-rule triggers some tables carry besides the audit trigger (T-106, T-107). */
+const GUARD_TRIGGERS: Partial<Record<(typeof TENANT_TABLES)[number], string[]>> = {
+  tax_rates: ['tax_rates_rates_immutable'],
+};
+
 const RLS_VIOLATION = /new row violates row-level security policy/;
 const PERMISSION_DENIED = /permission denied/;
 
@@ -64,7 +69,7 @@ describe('tenant isolation of the T-104 tables on a raw ekaro_app connection', (
         const { rows } = await c.query<{ forced: boolean; policies: string[]; triggers: string[] }>(
           `select c.relrowsecurity and c.relforcerowsecurity as forced,
                 array(select policyname::text from pg_policies p where p.tablename = c.relname order by 1) as policies,
-                array(select tgname::text from pg_trigger t where t.tgrelid = c.oid and not t.tgisinternal) as triggers
+                array(select tgname::text from pg_trigger t where t.tgrelid = c.oid and not t.tgisinternal order by 1) as triggers
            from pg_class c where c.relname = $1`,
           [table],
         );
@@ -76,7 +81,7 @@ describe('tenant isolation of the T-104 tables on a raw ekaro_app connection', (
         policies: readable.includes(table)
           ? ['platform_read', 'tenant_isolation']
           : ['tenant_isolation'],
-        triggers: ['audit_row_change'],
+        triggers: ['audit_row_change', ...(GUARD_TRIGGERS[table] ?? [])],
       });
     },
   );

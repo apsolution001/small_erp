@@ -1,4 +1,5 @@
 import { DEFAULT_ROLES, type Permission, problemSchema } from '@ekaro/contracts';
+import { uuidv7 } from '@ekaro/core';
 import { type NestExpressApplication } from '@nestjs/platform-express';
 import type request from 'supertest';
 import { expect } from 'vitest';
@@ -52,6 +53,12 @@ export async function createTenant(app: NestExpressApplication): Promise<TestTen
     async as(roleName) {
       const existing = clients.get(roleName);
       if (existing !== undefined) return existing;
+      if (roleName === NO_ACCESS_ROLE) {
+        // A custom role an owner might create with nothing ticked (the role API is T-105).
+        await withTenantConnection(tenantId, (c) =>
+          c.query(`insert into roles (id, name) values ($1, $2)`, [uuidv7(), NO_ACCESS_ROLE]),
+        );
+      }
       const user = await createTestUser({ fullName: `${roleName} User` });
       await addMembership(tenantId, user.id, roleName);
       const client = apiClient(app, (await logIn(app, user.email)).body.accessToken);
@@ -61,10 +68,14 @@ export async function createTenant(app: NestExpressApplication): Promise<TestTen
   };
 }
 
+/** A custom role with no permissions, for permissions every default role holds. */
+export const NO_ACCESS_ROLE = 'No access';
+
 /**
  * A default role that holds `permission` (preferring a narrow one, Admin as the last resort) and
  * one that does not, straight from `DEFAULT_ROLES`, so permission tests follow the role matrix
- * as it changes. The Owner is never used: it holds everything by construction.
+ * as it changes. When every default role holds it (`masters.item:view`), the denied role is
+ * {@link NO_ACCESS_ROLE}. The Owner is never used: it holds everything by construction.
  */
 export function rolesFor(permission: Permission): { allowed: string; denied: string } {
   const roles = DEFAULT_ROLES.filter((r) => !r.allPermissions);
@@ -73,11 +84,9 @@ export function rolesFor(permission: Permission): { allowed: string; denied: str
     ...roles.filter((r) => r.name === 'Admin'),
   ];
   const allowed = narrowFirst.find((r) => r.permissions.includes(permission));
+  if (allowed === undefined) throw new Error(`No default role holds ${permission}`);
   const denied = roles.find((r) => !r.permissions.includes(permission));
-  if (allowed === undefined || denied === undefined) {
-    throw new Error(`No default role pair for ${permission}`);
-  }
-  return { allowed: allowed.name, denied: denied.name };
+  return { allowed: allowed.name, denied: denied?.name ?? NO_ACCESS_ROLE };
 }
 
 /** Asserts a problem+json response with the given status and code, and returns it. */
