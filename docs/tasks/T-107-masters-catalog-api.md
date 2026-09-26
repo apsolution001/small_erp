@@ -66,5 +66,5 @@ Run on 2026-09-26 against local Postgres 16 + Redis 7, test DB `ekaro_masters_te
 ## Follow-ups
 
 - **Sprint 2 (posting):** lock `baseUnitId`, `trackBatches`/`trackExpiry` and conversion factors of an item once it has stock postings (a port like the company's, ADR 0017 §6); decide whether a unit's `decimalPlaces` may be lowered once quantities exist.
-- **T-106 interplay:** if `booksBeginDate` moves earlier (allowed until the first posting), items created before keep their first rate at the old date, so `?on=` returns nothing for the gap. Decide whether the company PATCH should also move each item's first rate row, or whether the effective-rate lookup should fall back to the earliest row.
+- ~~**T-106 interplay**~~: resolved in T-106 (decision 1): moving the books earlier adds a first-rate row from the new date for every item.
 - **T-153 (web):** list responses are `paginated(xResponseSchema)`; `GET /item-categories?tree=true` returns `ItemCategoryTreeNode[]`; decimals come back at full scale (`"50.000000"`), so format them for display.
