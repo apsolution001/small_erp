@@ -109,15 +109,16 @@ Later sprints extend the catalogue (inventory._, purchase._, sales._, production
 
 ### 3.3 Users & roles (tenant-scoped)
 
-- `GET/POST /users`: POST sends an invitation (email via outbox with a token link). If the email already exists as a user, they get a membership on acceptance.
-- `POST /auth/accept-invitation {token, fullName?, password?}`.
-- `PATCH /users/:membershipId {roleId, allBranches, branchIds, status, version}`. Rules: you cannot change your own role, you cannot disable the last active Owner, and only an Owner can assign the Owner role.
-- `GET/POST/PATCH/DELETE /roles`: system roles cannot be deleted, a role in use cannot be deleted (409 `ROLE_IN_USE`), and `POST /roles/:id/clone` clones one.
+- `GET/POST /users`: POST sends an invitation (email via outbox with a token link). If the email already exists as a user, they get a membership on acceptance. Inviting an email with an open invitation replaces it. `GET /users/:membershipId` reads one.
+- `GET /invitations?status=&q=&sort=` (`access.user:view`) and `DELETE /invitations/:id` (revoke, `access.user:delete`). An invitation is `pending`, `expired` (derived), `accepted` or `revoked`.
+- `POST /auth/invitations/preview {token}` and `POST /auth/accept-invitation {token, fullName?, password?}` (public). A new email sends a name and password; an existing user sends the token only. Acceptance starts no session (T-105, ADR 0017).
+- `PATCH /users/:membershipId {roleId, allBranches, branchIds, status, version}`. Rules: you cannot change your own role, you cannot disable the last active Owner, and only an Owner can assign the Owner role. T-105 adds: you cannot disable yourself, only an Owner changes an Owner's membership, and nobody assigns a role with permissions they do not hold (ADR 0017).
+- `GET/POST/PATCH/DELETE /roles`: system roles cannot be deleted, a role in use cannot be deleted (409 `ROLE_IN_USE`), and `POST /roles/:id/clone` clones one. The Owner role's permissions and billing flag cannot be edited. A free (non-billable) role may only view and export (BRD §12).
 - The minimum-2-billable-users billing rule (BRD §12) is a billing concern and is not enforced at membership level.
 
 ### 3.4 Audit
 
-`GET /audit-logs?table=&rowId=&userId=&from=&to=` is paginated with keyset (`cursor`) pagination and requires `audit.log:view`.
+`GET /audit-logs?table=&rowId=&userId=&action=&from=&to=&cursor=&limit=` is paginated with keyset (`cursor`) pagination and requires `audit.log:view`. `from` is inclusive, `to` exclusive. A `company_profile` row's `rowId` is the tenant id, and a `membership_branches` row's is its membership id.
 
 ## 4. Acceptance criteria
 

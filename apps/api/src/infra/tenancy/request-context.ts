@@ -13,6 +13,8 @@ export interface Principal {
   readonly sessionId: string;
   readonly roleId: string;
   readonly roleName: string;
+  /** Holds the tenant's Owner role (`roles.is_owner`): only an Owner may assign it. */
+  readonly isOwner: boolean;
   /** Effective permissions (the whole catalogue for the Owner). */
   readonly permissions: ReadonlySet<Permission>;
   readonly allBranches: boolean;
@@ -32,4 +34,9 @@ export interface RequestContext extends ClsStore {
   userId?: string;
   membershipId?: string;
   principal?: Principal;
+  /** Callbacks for after the tenant transaction commits (`TenantContext.afterCommit`). */
+  afterCommit?: AfterCommitCallback[];
 }
+
+/** Work outside the database that must only see committed state (cache invalidation). */
+export type AfterCommitCallback = () => Promise<void>;

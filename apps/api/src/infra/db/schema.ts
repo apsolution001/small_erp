@@ -4,10 +4,13 @@
  */
 export * from '../../modules/platform/tenants/tenants.schema.js';
 export * from '../../modules/auth/users/users.schema.js';
+export * from '../../modules/auth/users/tenant-users.view.js';
 export * from '../../modules/auth/sessions/sessions.schema.js';
 export * from '../../modules/auth/sessions/refresh-tokens.schema.js';
 export * from '../../modules/access/roles/roles.schema.js';
 export * from '../../modules/access/memberships/memberships.schema.js';
+export * from '../../modules/access/invitations/invitations.schema.js';
+export * from '../outbox/outbox.schema.js';
 export * from '../../modules/masters/company/company-profile.schema.js';
 export * from '../../modules/masters/branches/branches.schema.js';
 export * from '../../modules/masters/godowns/godowns.schema.js';

@@ -5,7 +5,7 @@ description: Checklist and file templates for adding a new business entity or mo
 
 # Add a business entity
 
-Follow the existing reference implementation, `apps/api/src/modules/masters/units` (API; conventions in ADR 0017) and, once T-153 lands, `apps/web/src/features/masters/units` (web). Copy its shape and do not invent a new one.
+Follow the existing reference implementation, `apps/api/src/modules/masters/units` (API; conventions in ADR 0019) and, once T-153 lands, `apps/web/src/features/masters/units` (web). Copy its shape and do not invent a new one.
 
 ## API
 
@@ -20,7 +20,7 @@ Follow the existing reference implementation, `apps/api/src/modules/masters/unit
    - writes go through `mapConstraintErrors(write, { <constraint>: () => new ConflictError('ALREADY_EXISTS', ...) })`;
    - update = `findById(id, { forUpdate: true })` → `assertVersion` → `changesOf(patch)` → `parseMergedRecord(xRecordSchema, toResponse(existing), changes)` → rules needing other data (`ValidationError.forField`) → `update`;
    - delete = `deleteUnlessReferenced` (hard delete, 409 `IN_USE`) for units/tax rates/categories, otherwise deactivate;
-   - a rule that depends on a later module goes through a port (ADR 0017 §6).
+   - a rule that depends on a later module goes through a port (ADR 0019 §6).
 9. **Controller**: `@RequirePermission` on every route, `ZodValidationPipe(<contract schema>)` on body and query, `@IdParam()` for `:id`, `@HttpCode(204)` on DELETE. Register controller, service and repository in `<area>.module.ts`.
 10. **Tests:**
     - `<entity>.service.spec.ts` with the repository mocked (version conflict, merged-record 422, constraint mapping, business rules);

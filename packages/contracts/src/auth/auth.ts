@@ -68,7 +68,7 @@ export type SwitchTenant = z.infer<typeof switchTenantSchema>;
  */
 export const acceptInvitationSchema = z
   .strictObject({
-    token: z.string().min(1),
+    token: z.string().min(1).max(256),
     fullName: fullNameSchema.optional(),
     password: passwordSchema.optional(),
   })
@@ -77,6 +77,35 @@ export const acceptInvitationSchema = z
     path: ['password'],
   });
 export type AcceptInvitation = z.infer<typeof acceptInvitationSchema>;
+
+/** `POST /auth/invitations/preview`: the token travels in the body, never in a URL path. */
+export const invitationTokenSchema = z.strictObject({ token: z.string().min(1).max(256) });
+export type InvitationToken = z.infer<typeof invitationTokenSchema>;
+
+/**
+ * What the invitation page shows before acceptance. `existingUser` tells the page whether to ask
+ * for a name and password (new user) or only to confirm (existing user).
+ */
+export const invitationPreviewSchema = z.object({
+  email: z.string(),
+  companyName: z.string(),
+  roleName: z.string(),
+  invitedByName: z.string().nullable(),
+  expiresAt: timestampSchema,
+  existingUser: z.boolean(),
+});
+export type InvitationPreview = z.infer<typeof invitationPreviewSchema>;
+
+/**
+ * `POST /auth/accept-invitation` → 200. No session is started: the user signs in next, with the
+ * password they just chose or their existing one.
+ */
+export const acceptInvitationResponseSchema = z.object({
+  email: z.string(),
+  tenant: z.object({ id: uuidSchema, name: z.string() }),
+  userCreated: z.boolean(),
+});
+export type AcceptInvitationResponse = z.infer<typeof acceptInvitationResponseSchema>;
 
 export const TENANT_STATUSES = ['trial', 'active', 'suspended', 'closed'] as const;
 export const TENANT_PLANS = ['starter', 'growth', 'pro'] as const;

@@ -1,4 +1,4 @@
-# 0017 — Masters CRUD conventions: locking, merged records, references and deletes
+# 0019 — Masters CRUD conventions: locking, merged records, references and deletes
 
 **Status:** Accepted · 2026-09-26 · refines ADR 0003, 0008 and 0013 (T-106, T-107, T-108)
 

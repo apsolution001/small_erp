@@ -2,7 +2,10 @@ import { uuidv7 } from '@ekaro/core';
 import { describe, expect, it } from 'vitest';
 import { pathsOf, unrecognizedKeysOf } from '../testing/paths.js';
 import {
+  acceptInvitationResponseSchema,
   acceptInvitationSchema,
+  invitationPreviewSchema,
+  invitationTokenSchema,
   loginResponseSchema,
   loginSchema,
   passwordSchema,
@@ -117,6 +120,38 @@ describe('login and tenant selection', () => {
       tenantId,
     });
     expect(pathsOf(switchTenantSchema.safeParse({ tenantId: 'x' }))).toEqual(['tenantId']);
+  });
+});
+
+describe('invitation token, preview and acceptance response', () => {
+  it('takes the token in a strict body, bounded in length', () => {
+    expect(invitationTokenSchema.parse({ token: 'tok' })).toEqual({ token: 'tok' });
+    expect(pathsOf(invitationTokenSchema.safeParse({ token: '' }))).toEqual(['token']);
+    expect(pathsOf(invitationTokenSchema.safeParse({ token: 'x'.repeat(257) }))).toEqual(['token']);
+    expect(unrecognizedKeysOf(invitationTokenSchema.safeParse({ token: 't', email: 'a' }))).toEqual(
+      ['email'],
+    );
+    expect(pathsOf(acceptInvitationSchema.safeParse({ token: 'x'.repeat(257) }))).toEqual([
+      'token',
+    ]);
+  });
+
+  it('parses the preview and the acceptance response', () => {
+    const preview = {
+      email: 'new@example.com',
+      companyName: 'Mehta Traders',
+      roleName: 'Sales',
+      invitedByName: null,
+      expiresAt: '2026-10-03T00:00:00.000Z',
+      existingUser: false,
+    };
+    expect(invitationPreviewSchema.parse(preview)).toEqual(preview);
+    const accepted = {
+      email: 'new@example.com',
+      tenant: { id: uuidv7(), name: 'Mehta Traders' },
+      userCreated: true,
+    };
+    expect(acceptInvitationResponseSchema.parse(accepted)).toEqual(accepted);
   });
 });
 

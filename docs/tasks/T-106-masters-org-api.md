@@ -14,11 +14,11 @@ Spec 02 endpoints for company, branches, godowns and document-series, with the r
 
 ## Decisions
 
-Shared conventions: [ADR 0017](../adr/0017-masters-crud-conventions.md) (written with T-107).
+Shared conventions: [ADR 0019](../adr/0019-masters-crud-conventions.md) (written with T-107).
 
 1. **Company.**
    - `GET /company` and `PATCH /company` (merged record through `companyRecordSchema`: GSTIN state and PAN).
-   - `valuationMethod` and `booksBeginDate` lock after the first stock posting: 409 `VALUATION_METHOD_LOCKED` / `BOOKS_BEGIN_DATE_LOCKED` (the second code is new in contracts). "Posted" is asked of a port, `STOCK_POSTINGS` (`StockPostingsPort.hasStockPostings()`), bound in `MastersModule` to `NoStockPostingsYet` (always false). Sprint 2's posting engine rebinds the token (ADR 0017 §6). The e2e suite swaps in a switchable fake through the new `createTestApp({ providers })` option to prove the lock.
+   - `valuationMethod` and `booksBeginDate` lock after the first stock posting: 409 `VALUATION_METHOD_LOCKED` / `BOOKS_BEGIN_DATE_LOCKED` (the second code is new in contracts). "Posted" is asked of a port, `STOCK_POSTINGS` (`StockPostingsPort.hasStockPostings()`), bound in `MastersModule` to `NoStockPostingsYet` (always false). Sprint 2's posting engine rebinds the token (ADR 0019 §6). The e2e suite swaps in a switchable fake through the new `createTestApp({ providers })` option to prove the lock.
    - Setting a locked field to its current value is not a change and passes.
    - **Moving the books earlier** (allowed until the first posting) would leave items with no GST rate between the new and the old books-begin date. The service therefore adds, for every item whose first rate starts after the new date, a row from the new date with that same first slab (`ItemsRepository.extendFirstRatesTo`, one INSERT…SELECT). Rows are added, never re-dated, so `item_tax_rates` stays append-only. Moving the books later needs nothing. (This closes the T-107 follow-up.)
    - `hsnMinDigits` changes apply to HSNs set or edited afterwards (T-107 decision 4).
@@ -39,16 +39,16 @@ Shared conventions: [ADR 0017](../adr/0017-masters-crud-conventions.md) (written
    - One default per (branch, type, FY): creating or patching a series with `isDefault: true` moves the flag. Unsetting the default is allowed (allocation in Sprint 2 must then be told the series).
    - A new series needs an active branch (422 on `branchId`). No DELETE (there is no delete permission): series are never removed.
    - **Database guard** `document_series_numbering_guard` (BEFORE UPDATE): branch, type and FY never change; `next_number` never decreases; once `last_issued_number` is set, prefix/suffix/padding are fixed and `last_issued_number` only moves forward.
-5. **Migrations** (renumbered after the base's `0005/0006_sec_sessions_lockout*` when merging the T-104 security fixes): `0009_t106_masters_org.sql` (generated: the column and the gapless check) and `0010_t106_masters_org_security.sql` (the guard trigger). The T-107 ones became `0007`/`0008`.
+5. **Migrations** (renumbered after the base's `0005/0006_sec_sessions_lockout*` and T-105's `0007/0008` when merging): `0011_t106_masters_org.sql` (generated: the column and the gapless check) and `0012_t106_masters_org_security.sql` (the guard trigger). The T-107 ones are `0009`/`0010`.
 6. **Branch scope** (`membership.branchIds`) does not filter masters lists in Sprint 1: branches, godowns and series are company-wide setup, read by users of all branches (for example to pick a transfer destination). Documents will apply the scope (Sprint 2).
 
 ## Plan
 
 - [x] Contracts: `lastIssuedNumber`, `godownRecordSchema`, `docNumberFamily`, error codes `BOOKS_BEGIN_DATE_LOCKED`, `SERIES_NUMBERING_LOCKED`, `SERIES_NUMBERS_OVERLAP`; core `seriesNumbersCollide`
-- [x] Migrations 0009/0010
+- [x] Migrations 0011/0012
 - [x] Company (port, controller, service, mapper), branches, godowns, document series; `MastersModule` wiring
 - [x] Unit specs (company, branches, godowns, series service and rules); e2e per entity
-- [x] Merge of the T-104 security fixes, migrations renumbered, ADR renumbered to 0017
+- [x] Merge of the T-104 security fixes, migrations renumbered, ADR renumbered to 0019 (0016–0018 went to the base), T-105 merged
 
 ## Verification
 
@@ -56,7 +56,7 @@ Run on 2026-09-26 after merging `claude/brave-dirac-k9ikzp` (T-104 security fixe
 
 - `pnpm format`; `pnpm lint` 4/4; `pnpm typecheck` 4/4.
 - `pnpm test`: core **130** (100% statements and branches, including `seriesNumbersCollide`), contracts **300** (100%), web **1**, api **223** passed.
-- `db:migrate` on a fresh database: `migrations applied` (0000–0010).
+- `db:migrate` on a fresh database: `migrations applied` (0000–0012).
 - `pnpm --filter @ekaro/api test:e2e`: **21 files, 251 tests passed**. New in this task:
   - `masters/company.e2e-spec.ts` (8): the seeded profile of each tenant; PATCH with audit; stale version; 422 for fields, merged GSTIN vs state and the unknown `logoObjectKey`; valuation change before postings; 409 `VALUATION_METHOD_LOCKED` and `BOOKS_BEGIN_DATE_LOCKED` with the fake posting engine switched on while other settings stay editable; moving the books a year earlier gives an item's rate history `[earlier, original]` with the same slab; permissions; isolation.
   - `masters/branches.e2e-spec.ts` (11): seeded HO; a Karnataka branch with the company PAN; 422 for a GSTIN of another state or PAN; duplicate code 409; merged state change 422; the head-office flag moves and back (both audited); 422 `HEAD_OFFICE_REQUIRED` for unset/deactivate/DELETE; 409 `BRANCH_HAS_ACTIVE_GODOWNS`, then deactivation once the godown is inactive; inactive branch cannot be HO; stale version; search/sort; permissions; isolation.

@@ -5,10 +5,12 @@ import {
   roleCloneSchema,
   roleCreateSchema,
   roleListQuerySchema,
+  roleRecordSchema,
   roleResponseSchema,
   roleUpdateSchema,
 } from './roles.js';
 import {
+  invitationListQuerySchema,
   invitationResponseSchema,
   userInviteSchema,
   userListQuerySchema,
@@ -178,12 +180,34 @@ describe('user responses', () => {
       role: { id: roleId, name: 'Viewer' },
       allBranches: true,
       branchIds: [],
+      status: 'pending',
+      invitedBy: { id: uuidv7(), name: 'Asha Mehta' },
       expiresAt: '2026-10-03T00:00:00.000Z',
       acceptedAt: null,
       revokedAt: null,
       createdAt: '2026-09-26T00:00:00.000Z',
     };
     expect(invitationResponseSchema.parse(row)).toEqual(row);
+    const closed = { ...row, role: null, invitedBy: null, status: 'revoked' };
+    expect(invitationResponseSchema.parse(closed)).toEqual(closed);
+    expect(pathsOf(invitationResponseSchema.safeParse({ ...row, status: 'lost' }))).toEqual([
+      'status',
+    ]);
+  });
+});
+
+describe('invitationListQuerySchema', () => {
+  it('filters by status and sorts by email, creation or expiry only', () => {
+    expect(invitationListQuerySchema.parse({ status: 'expired', sort: 'expiresAt:asc' })).toEqual({
+      page: 1,
+      pageSize: 25,
+      status: 'expired',
+      sort: 'expiresAt:asc',
+    });
+    expect(pathsOf(invitationListQuerySchema.safeParse({ sort: 'tokenHash:asc' }))).toEqual([
+      'sort',
+    ]);
+    expect(pathsOf(invitationListQuerySchema.safeParse({ status: 'lost' }))).toEqual(['status']);
   });
 });
 
@@ -241,8 +265,53 @@ describe('role schemas', () => {
       description: null,
       permissions: ['masters.item:view', 'audit.log:view'],
       isSystem: true,
+      isOwner: false,
       isBillable: true,
     };
     expect(roleResponseSchema.parse(row)).toEqual(row);
+  });
+});
+
+describe('free (non-billable) roles are read-only (BRD §12)', () => {
+  const readOnly = ['masters.item:view', 'masters.party:export', 'audit.log:view'] as const;
+
+  it('lets a free role view and export only', () => {
+    expect(
+      roleCreateSchema.safeParse({ name: 'Auditor', isBillable: false, permissions: readOnly })
+        .success,
+    ).toBe(true);
+    const res = roleCreateSchema.safeParse({
+      name: 'Cheap clerk',
+      isBillable: false,
+      permissions: [...readOnly, 'masters.item:edit', 'masters.party:create'],
+    });
+    expect(pathsOf(res)).toEqual(['permissions']);
+    expect(res.error?.issues[0]?.message).toBe(
+      'A free (non-billable) role can only view and export; remove masters.item:edit, masters.party:create',
+    );
+  });
+
+  it('lets a billable role hold anything', () => {
+    expect(
+      roleCreateSchema.safeParse({ name: 'Clerk', permissions: ['masters.item:delete'] }).success,
+    ).toBe(true);
+  });
+
+  it('checks the merged record, so a patch cannot sneak a write into a free role', () => {
+    const existing = {
+      name: 'Viewer',
+      description: null,
+      permissions: ['masters.item:view'],
+      isBillable: false,
+    };
+    const patch = { permissions: ['masters.item:view', 'masters.item:edit'], version: 1 };
+    expect(roleUpdateSchema.safeParse(patch).success).toBe(true);
+    expect(pathsOf(roleRecordSchema.safeParse({ ...existing, ...patch }))).toEqual(['permissions']);
+    expect(roleRecordSchema.parse({ ...existing, isBillable: true, ...patch })).toEqual({
+      name: 'Viewer',
+      description: null,
+      permissions: ['masters.item:view', 'masters.item:edit'],
+      isBillable: true,
+    });
   });
 });

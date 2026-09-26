@@ -238,3 +238,88 @@ describe('TenantContext.runInTenant (jobs)', () => {
     expect(outerAfter.tenant).toBe(tenant.id);
   });
 });
+
+describe('TenantContext.afterCommit', () => {
+  let app: NestExpressApplication;
+  let tenant: Tenant;
+  let table = '';
+
+  beforeAll(async () => {
+    tenant = await createTestTenant();
+    table = await createProbeTable('test_after_commit');
+    app = await createTestApp();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await dropTable(table);
+  });
+
+  const insert = (txHost: TransactionHost<AppTransactionalAdapter>, name: string) =>
+    txHost.tx.execute(sql`insert into ${sql.identifier(table)} (name) values (${name})`);
+
+  const committed = (name: string) =>
+    withTenantConnection(tenant.id, async (c) => {
+      const { rows } = await c.query<{ n: number }>(
+        `select count(*)::int as n from ${table} where name = $1`,
+        [name],
+      );
+      return rows[0]?.n;
+    });
+
+  it('runs callbacks after the commit, in order, when the data is visible to others', async () => {
+    const tenantContext = app.get(TenantContext);
+    const txHost = app.get<TransactionHost<AppTransactionalAdapter>>(TransactionHost);
+    const events: string[] = [];
+    await tenantContext.runInTenant(tenant.id, null, async () => {
+      await insert(txHost, 'after-commit');
+      tenantContext.afterCommit(async () => {
+        events.push(`first:${String(await committed('after-commit'))}`);
+      });
+      tenantContext.afterCommit(() => {
+        events.push('second');
+        return Promise.resolve();
+      });
+      events.push('body done');
+    });
+    expect(events).toEqual(['body done', 'first:1', 'second']);
+  });
+
+  it('never runs them after a rollback', async () => {
+    const tenantContext = app.get(TenantContext);
+    const txHost = app.get<TransactionHost<AppTransactionalAdapter>>(TransactionHost);
+    const events: string[] = [];
+    await expect(
+      tenantContext.runInTenant(tenant.id, null, async () => {
+        await insert(txHost, 'rolled-back');
+        tenantContext.afterCommit(() => {
+          events.push('ran');
+          return Promise.resolve();
+        });
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+    expect(events).toEqual([]);
+    expect(await committed('rolled-back')).toBe(0);
+  });
+
+  it('logs a failing callback without failing the committed work, and runs the rest', async () => {
+    const tenantContext = app.get(TenantContext);
+    const events: string[] = [];
+    await tenantContext.runInTenant(tenant.id, null, () => {
+      tenantContext.afterCommit(() => Promise.reject(new Error('cache down')));
+      tenantContext.afterCommit(() => {
+        events.push('still ran');
+        return Promise.resolve();
+      });
+      return Promise.resolve();
+    });
+    expect(events).toEqual(['still ran']);
+  });
+
+  it('refuses to queue a callback outside a tenant transaction', () => {
+    expect(() => {
+      app.get(TenantContext).afterCommit(() => Promise.resolve());
+    }).toThrow('afterCommit() needs a tenant transaction');
+  });
+});

@@ -1,5 +1,5 @@
 import { type z } from 'zod';
-import { ConflictError, ValidationError } from './errors/domain-error.js';
+import { ValidationError, versionConflict } from './errors/domain-error.js';
 
 /**
  * Optimistic locking (backend standard): an update carries the `version` it read. The service
@@ -7,12 +7,7 @@ import { ConflictError, ValidationError } from './errors/domain-error.js';
  * transaction.
  */
 export function assertVersion(current: number, expected: number): void {
-  if (current !== expected) {
-    throw new ConflictError(
-      'VERSION_CONFLICT',
-      'This record was changed by someone else. Reload it and try again.',
-    );
-  }
+  if (current !== expected) throw versionConflict();
 }
 
 /**

@@ -18,7 +18,7 @@ Spec 02 for units, tax-rates, item-categories (tree, depth ≤ 3) and items (nes
 
 ## Decisions
 
-The conventions shared by every master are in [ADR 0017](../adr/0017-masters-crud-conventions.md). Specific to this task:
+The conventions shared by every master are in [ADR 0019](../adr/0019-masters-crud-conventions.md). Specific to this task:
 
 1. **Units.** Hard delete while unreferenced; any foreign-key violation on the delete is 409 `IN_USE`. A duplicate code (codes are upper-cased) is 409 `ALREADY_EXISTS` naming the code. `?q=` searches code and name; the default sort is `code:asc`. Contracts gained `unitRecordSchema` (no cross-field rule yet), so the PATCH flow is the same as every other master's.
 2. **Tax rates.** PATCH accepts `name`/`isActive` only (contracts). A `BEFORE UPDATE` trigger `tax_rates_rates_immutable` refuses any change to `gst_rate`, `cess_rate` or the three flags (check_violation), so no writer can change a slab's rates. A duplicate slab (same rates and flags, compared numerically: `18` = `18.00`) is 409. A slab an item has ever used is 409 `IN_USE`. Default sort `gstRate:asc`. Rates are returned as Postgres renders `numeric(7,4)`: `"18.0000"`.
@@ -37,16 +37,16 @@ The conventions shared by every master are in [ADR 0017](../adr/0017-masters-cru
    - Sending `units` on PATCH replaces the conversions as a diff (delete dropped, update changed factors, insert new), so the audit log shows real changes; a PATCH bumps the item's version even when only conversions change.
    - DELETE deactivates (204, idempotent). `?q=` matches code and name (contains) and HSN (prefix); filters `kind`, `type`, `categoryId`, `active`.
    - The company read path (`CompanyService.settings()`) was created here; T-106 adds the company endpoints.
-5. **Migrations:** `0007_t107_masters_catalog.sql` (generated; the two `unique (tenant_id, id)` constraints on `units`/`tax_rates` were moved before the foreign keys that target them, since drizzle-kit emitted them last) and `0008_t107_masters_catalog_security.sql` (RLS/grants/audit via `app_enable_tenant_table`, the item tax rate revoke, the slab trigger).
+5. **Migrations:** `0009_t107_masters_catalog.sql` (generated; the two `unique (tenant_id, id)` constraints on `units`/`tax_rates` were moved before the foreign keys that target them, since drizzle-kit emitted them last) and `0010_t107_masters_catalog_security.sql` (RLS/grants/audit via `app_enable_tenant_table`, the item tax rate revoke, the slab trigger).
 6. **Tests:** permission tests take the allowed and denied roles from `DEFAULT_ROLES` (`rolesFor`). For a permission every default role holds (`masters.item:view`), the denied role is a custom role with no permissions, inserted directly (the role API is T-105).
 
 ## Plan
 
 - [x] Shared helpers: list queries, optimistic lock + merged record, constraint mapping, record meta, tenant lock, `IdParam`, `ValidationError.forField`
-- [x] Schemas + migrations 0007/0008 (renumbered after the base's 0005/0006 security migrations)
+- [x] Schemas + migrations 0009/0010 (renumbered after the base's 0005–0008 when merging the T-104 security fixes and T-105)
 - [x] Units (reference), tax rates, item categories, items + item tax rates; `MastersModule` registered in `AppModule`
 - [x] Unit specs per service; e2e per entity; raw RLS isolation for the new tables; migration table count
-- [x] ADR 0017; new-business-module skill updated to the real paths and names
+- [x] ADR 0019; new-business-module skill updated to the real paths and names
 
 ## Verification
 
@@ -65,6 +65,6 @@ Run on 2026-09-26 against local Postgres 16 + Redis 7, test DB `ekaro_masters_te
 
 ## Follow-ups
 
-- **Sprint 2 (posting):** lock `baseUnitId`, `trackBatches`/`trackExpiry` and conversion factors of an item once it has stock postings (a port like the company's, ADR 0017 §6); decide whether a unit's `decimalPlaces` may be lowered once quantities exist.
+- **Sprint 2 (posting):** lock `baseUnitId`, `trackBatches`/`trackExpiry` and conversion factors of an item once it has stock postings (a port like the company's, ADR 0019 §6); decide whether a unit's `decimalPlaces` may be lowered once quantities exist.
 - ~~**T-106 interplay**~~: resolved in T-106 (decision 1): moving the books earlier adds a first-rate row from the new date for every item.
 - **T-153 (web):** list responses are `paginated(xResponseSchema)`; `GET /item-categories?tree=true` returns `ItemCategoryTreeNode[]`; decimals come back at full scale (`"50.000000"`), so format them for display.

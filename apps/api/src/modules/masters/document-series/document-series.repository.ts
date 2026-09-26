@@ -60,7 +60,7 @@ export class DocumentSeriesRepository {
         ),
       )
       .limit(query.pageSize)
-      .offset(pageOffset(query));
+      .offset(pageOffset(query.page, query.pageSize));
     const [totals] = await this.db.select({ total: count() }).from(documentSeries).where(where);
     return { rows, total: totals?.total ?? 0 };
   }
