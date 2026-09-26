@@ -6,8 +6,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss()],
-  // One .env for the monorepo (repo root); only VITE_* variables reach the browser.
-  envDir: fileURLToPath(new URL('../..', import.meta.url)),
+  // Env comes from apps/web (Vite's default), never the API's root .env: its NODE_ENV would
+  // turn a production build into a development one.
   resolve: {
     conditions: ['@ekaro/source'],
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
