@@ -1,8 +1,15 @@
 import { type GstinLookupResponse } from '@ekaro/contracts';
 import { getState } from '@ekaro/core';
-import { Building2Icon, CircleAlertIcon, Loader2Icon } from 'lucide-react';
+import { Building2Icon, CircleAlertIcon, InfoIcon, Loader2Icon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { errorMessage } from '@/lib/api-error';
+import { type ApiErrorCode, errorMessage, isApiError } from '@/lib/api-error';
+
+/** The portal is down or the lookup limit is hit: tell the user, but do not stop signup. */
+const LOOKUP_UNAVAILABLE: ReadonlySet<ApiErrorCode> = new Set<ApiErrorCode>([
+  'SERVICE_UNAVAILABLE',
+  'RATE_LIMITED',
+  'NETWORK_ERROR',
+]);
 
 export interface GstinLookupCardProps {
   data: GstinLookupResponse | undefined;
@@ -21,6 +28,16 @@ export function GstinLookupCard({ data, isFetching, error }: GstinLookupCardProp
     );
   }
   if (error !== null && error !== undefined) {
+    if (isApiError(error) && LOOKUP_UNAVAILABLE.has(error.code)) {
+      // Not a verdict on the GSTIN: the lookup is only a preview, so signup goes on.
+      return (
+        <p role="status" className="flex items-start gap-2 text-sm text-muted-foreground">
+          <InfoIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          The GST portal lookup is unavailable right now, so we cannot show your company yet. You
+          can still fill in the rest and create your account.
+        </p>
+      );
+    }
     return (
       <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
         <CircleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0" />

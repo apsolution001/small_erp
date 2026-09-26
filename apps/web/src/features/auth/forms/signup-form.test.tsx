@@ -85,6 +85,21 @@ describe('signup', () => {
     expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
   });
 
+  it('keeps signup open when the GST portal lookup is unavailable (503)', async () => {
+    const server = mockFetch().on(`GET /platform/gstin/${GSTIN}`, () =>
+      problemResponse(problem(503, 'SERVICE_UNAVAILABLE', { detail: 'GSP down.' })),
+    );
+    const { user } = await openSignup(server);
+
+    await user.type(screen.getByLabelText('Company GSTIN'), GSTIN);
+
+    expect(
+      await screen.findByText(/GST portal lookup is unavailable right now/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
+  });
+
   it('puts server validation errors on their fields', async () => {
     const server = mockFetch()
       .on(`GET /platform/gstin/${GSTIN}`, () => json(200, lookup()))

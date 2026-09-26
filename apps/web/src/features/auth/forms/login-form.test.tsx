@@ -14,6 +14,16 @@ async function openLogin(server: ReturnType<typeof mockFetch>, path = '/login') 
 }
 
 describe('login form', () => {
+  it('refuses a password bcrypt would truncate (over 72 UTF-8 bytes) before calling the API', async () => {
+    const server = mockFetch();
+    const { user } = await openLogin(server);
+    await user.type(screen.getByLabelText('Email'), 'owner@example.com');
+    await user.type(screen.getByLabelText('Password'), '₹'.repeat(25)); // 75 bytes
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText('Use at most 72 bytes')).toBeInTheDocument();
+    expect(server.callsTo('POST /auth/login')).toHaveLength(0);
+  });
+
   it('validates with the contracts schema before calling the API', async () => {
     const server = mockFetch();
     const { user } = await openLogin(server);
@@ -93,6 +103,29 @@ describe('tenant picker', () => {
     });
     // Both companies stay available to the switcher; the chosen one is current.
     expect(auth.getState().tenants.map((t) => t.tenantId)).toEqual([TENANT_ID, OTHER_TENANT_ID]);
+  });
+
+  it('never retries a single-use selection token: any failure goes back to login', async () => {
+    const server = mockFetch()
+      .on('POST /auth/login', () => json(200, selection))
+      .on('POST /auth/select-tenant', () =>
+        problemResponse(
+          problem(403, 'FORBIDDEN', { detail: 'You do not have access to this company.' }),
+        ),
+      );
+    const { user } = await openLogin(server);
+
+    await user.type(screen.getByLabelText('Email'), 'ca@example.com');
+    await user.type(screen.getByLabelText('Password'), 'long enough password{Enter}');
+    await user.click(await screen.findByRole('button', { name: /Shah Industries/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'You do not have access to this company. Sign in again to choose a company.',
+      ),
+    ).toBeInTheDocument();
+    expect(server.callsTo('POST /auth/select-tenant')).toHaveLength(1);
   });
 
   it('sends the user back to login when the 5-minute selection token has expired', async () => {

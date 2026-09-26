@@ -1,12 +1,14 @@
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
-import { errorMessage } from '@/lib/api-error';
+import { errorMessage, isApiError } from '@/lib/api-error';
 import { useAuth } from '@/lib/auth';
 
 /**
  * Switch company: a new session for the other membership, then an empty cache (spec 01 §3.2).
  * The user lands on the dashboard, because the page they were on belonged to the old company.
+ * Switching needs the refresh cookie too: a 401 means the session is over (the client's refresh
+ * then fails and the guard shows login, which says why), while a 403 leaves the session as is.
  */
 export function useSwitchTenant() {
   const { controller, tenants } = useAuth();
@@ -19,6 +21,7 @@ export function useSwitchTenant() {
       await navigate({ to: '/' });
     },
     onError: (error) => {
+      if (isApiError(error) && error.status === 401) return;
       toast.error(errorMessage(error));
     },
   });

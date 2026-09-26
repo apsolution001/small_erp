@@ -1,41 +1,44 @@
 import { type TenantSelectionResponse } from '@ekaro/contracts';
 import { Building2Icon, ChevronRightIcon, Loader2Icon } from 'lucide-react';
 import { useState } from 'react';
-import { FormAlert } from '@/components/form-alert';
 import { Button } from '@/components/ui/button';
-import { isApiError } from '@/lib/api-error';
+import { errorMessage, isApiError } from '@/lib/api-error';
 import { useAuth } from '@/lib/auth';
 
 export interface TenantPickerProps {
   selection: TenantSelectionResponse;
-  /** The selection token expired (5 minutes): sign in again. */
+  /** Back to the login form, with a notice (empty for none). */
   onRestart: (message: string) => void;
 }
 
-/** Second login step for a user with several companies (spec 01 §3.2). */
+/** Why the selection failed, for the login page the user goes back to. */
+function restartMessage(error: unknown): string {
+  if (isApiError(error) && (error.code === 'TOKEN_EXPIRED' || error.code === 'TOKEN_INVALID')) {
+    return 'That took too long. Sign in again to choose a company.';
+  }
+  return `${errorMessage(error)} Sign in again to choose a company.`;
+}
+
+/**
+ * Second login step for a user with several companies (spec 01 §3.2). The selection token is
+ * single-use and lasts 5 minutes, so any failed attempt goes back to login: a retry with the
+ * same token would only be refused.
+ */
 export function TenantPicker({ selection, onRestart }: TenantPickerProps) {
   const { controller } = useAuth();
   const [pending, setPending] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const choose = async (tenantId: string) => {
     setPending(tenantId);
-    setError(null);
     try {
       await controller.selectTenant({ selectionToken: selection.selectionToken, tenantId });
-    } catch (e) {
-      if (isApiError(e) && (e.code === 'TOKEN_EXPIRED' || e.code === 'TOKEN_INVALID')) {
-        onRestart('That took too long. Sign in again to choose a company.');
-        return;
-      }
-      setError(isApiError(e) ? e.message : 'Could not open that company. Try again.');
-      setPending(null);
+    } catch (error) {
+      onRestart(restartMessage(error));
     }
   };
 
   return (
     <div className="grid gap-3">
-      <FormAlert message={error} />
       <ul className="grid gap-2" aria-label="Your companies">
         {selection.tenants.map((tenant, index) => (
           <li key={tenant.tenantId}>
@@ -65,6 +68,7 @@ export function TenantPicker({ selection, onRestart }: TenantPickerProps) {
         type="button"
         variant="link"
         className="justify-self-center"
+        disabled={pending !== null}
         onClick={() => {
           onRestart('');
         }}
