@@ -1,22 +1,30 @@
-import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { routeTree } from './routeTree.gen';
+import { App } from './app';
+import { ApiClient } from './lib/api-client';
+import { AuthController } from './lib/auth/auth-controller';
+import { env } from './lib/env';
+import { HotkeyRegistry } from './lib/hotkeys';
+import { createQueryClient } from './lib/query-client';
+import { initTheme } from './lib/theme/theme-store';
+import { createAppRouter } from './router';
 import './styles/index.css';
 
-const router = createRouter({ routeTree });
+initTheme();
 
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router;
-  }
-}
+const api = new ApiClient({ baseUrl: env.VITE_API_BASE_URL });
+const queryClient = createQueryClient();
+const auth = new AuthController(api, queryClient);
+const context = { auth, queryClient };
+const router = createAppRouter(context);
+// Outside React, so StrictMode's double effects never send the refresh cookie twice.
+void auth.restore();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element #root missing');
 
 createRoot(rootElement).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <App services={{ api, auth, hotkeys: new HotkeyRegistry(), router, context }} />
   </StrictMode>,
 );
