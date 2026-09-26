@@ -1,9 +1,11 @@
 import { problemSchema } from '@ekaro/contracts';
+import { Logger } from '@nestjs/common';
 import { type NestExpressApplication } from '@nestjs/platform-express';
 import { type Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { REDIS } from '../../src/infra/redis/redis.module.js';
 import { PasswordHasher } from '../../src/modules/auth/passwords/password-hasher.js';
+import { Pseudonymizer } from '../../src/modules/auth/security/pseudonymizer.js';
 import { LoginLockout } from '../../src/modules/auth/users/login-lockout.js';
 import { addMembership, createTestUser, TEST_PASSWORD, uniqueEmail } from '../factories/users.js';
 import { createTestApp, http } from '../support/app.js';
@@ -88,6 +90,28 @@ describe('login lockout (5 failures → 15 minutes, 423 ACCOUNT_LOCKED)', () => 
       [423, 'ACCOUNT_LOCKED'],
       [423, 'ACCOUNT_LOCKED'],
     ]);
+  });
+
+  it('logs failures and the lockout as security events, with the email only as a pseudonym', async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    const nobody = uniqueEmail('audited');
+    for (let i = 0; i < 5; i++) await attempt('wrong password', nobody);
+    const events = warn.mock.calls.flatMap((args: unknown[]): object[] => {
+      const fields = args[0];
+      return typeof fields === 'object' && fields !== null && 'event' in fields ? [fields] : [];
+    });
+    warn.mockRestore();
+    const emailHash = app.get(Pseudonymizer).email(nobody);
+    expect(events).toHaveLength(6);
+    expect(events.slice(0, 5)).toEqual(
+      Array.from({ length: 5 }, () => ({
+        event: 'auth.login_failed',
+        emailHash,
+        ipHash: expect.stringMatching(/^[0-9a-f]{32}$/) as string,
+      })),
+    );
+    expect(events[5]).toMatchObject({ event: 'auth.lockout', emailHash, reason: 'started' });
+    expect(JSON.stringify(events)).not.toContain(nobody);
   });
 
   it('keeps no email in Redis: lockout keys use a keyed pseudonym', async () => {
