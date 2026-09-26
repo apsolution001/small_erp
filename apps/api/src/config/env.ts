@@ -37,12 +37,29 @@ const envSchema = z
     JWT_ISSUER: z.string().min(1),
     JWT_AUDIENCE: z.string().min(1),
     REFRESH_TOKEN_TTL_DAYS: positiveInt.default(30),
+    /**
+     * `Secure` flag of the refresh cookie. Browsers drop Secure cookies over plain http, so local
+     * development over http sets it to false. Always true in production.
+     */
+    REFRESH_COOKIE_SECURE: z.stringbool().default(true),
     /** 32-byte key, base64, for encrypting TOTP secrets (AES-256-GCM). */
     DATA_ENCRYPTION_KEY: z.string().refine((value) => Buffer.from(value, 'base64').length === 32, {
       error: 'must be base64 that decodes to exactly 32 bytes',
     }),
 
     GSP_PROVIDER: z.enum(['mock']),
+
+    /**
+     * Reverse proxies in front of the API (Express `trust proxy` hop count). The client IP used for
+     * rate limiting is taken this many hops back in `X-Forwarded-For`; 0 means the socket address.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
+    /** Requests per minute per client IP on each auth route (security standard). */
+    THROTTLE_AUTH_PER_MINUTE: positiveInt.default(20),
+    /** Login and signup attempts per minute per email address. */
+    THROTTLE_ACCOUNT_PER_MINUTE: positiveInt.default(10),
+    /** GSTIN lookups per minute per client IP (spec 01 §3.1). */
+    THROTTLE_GSTIN_PER_MINUTE: positiveInt.default(10),
 
     SMTP_HOST: z.string().min(1),
     SMTP_PORT: port,
@@ -54,6 +71,13 @@ const envSchema = z
         code: 'custom',
         path: ['JWT_ACCESS_SECRET'],
         message: 'the example secret must not be used in production',
+      });
+    }
+    if (env.NODE_ENV === 'production' && !env.REFRESH_COOKIE_SECURE) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['REFRESH_COOKIE_SECURE'],
+        message: 'must be true in production',
       });
     }
   });

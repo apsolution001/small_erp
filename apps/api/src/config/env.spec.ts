@@ -43,6 +43,34 @@ describe('parseEnv', () => {
     expect(env.DATABASE_URL_PLATFORM).toBe(valid.DATABASE_URL_PLATFORM);
   });
 
+  it('defaults the session and throttling settings to their secure values', () => {
+    const env = parseEnv(valid);
+    expect(env.REFRESH_COOKIE_SECURE).toBe(true);
+    expect(env.TRUST_PROXY_HOPS).toBe(0);
+    expect(env.THROTTLE_AUTH_PER_MINUTE).toBe(20);
+    expect(env.THROTTLE_ACCOUNT_PER_MINUTE).toBe(10);
+    expect(env.THROTTLE_GSTIN_PER_MINUTE).toBe(10);
+  });
+
+  it('parses REFRESH_COOKIE_SECURE=false for local http, but not in production', () => {
+    expect(parseEnv({ ...valid, REFRESH_COOKIE_SECURE: 'false' }).REFRESH_COOKIE_SECURE).toBe(
+      false,
+    );
+    const error = errorOf({
+      ...valid,
+      NODE_ENV: 'production',
+      JWT_ACCESS_SECRET: 'a-production-secret-that-is-at-least-32-chars',
+      REFRESH_COOKIE_SECURE: 'false',
+    });
+    expect(error.issues.map((i) => i.variable)).toEqual(['REFRESH_COOKIE_SECURE']);
+  });
+
+  it('rejects an out-of-range proxy hop count', () => {
+    expect(errorOf({ ...valid, TRUST_PROXY_HOPS: '-1' }).issues.map((i) => i.variable)).toEqual([
+      'TRUST_PROXY_HOPS',
+    ]);
+  });
+
   it('applies defaults for optional settings', () => {
     const { NODE_ENV: _n, PORT: _p, LOG_LEVEL: _l, ...rest } = valid;
     const env = parseEnv(rest);

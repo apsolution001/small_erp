@@ -25,12 +25,21 @@ function onDatabase(url: string | undefined, database: string): string | undefin
   return parsed.toString();
 }
 
+/**
+ * Rate limits are effectively off in e2e runs: every test file hits the auth routes from the same
+ * loopback address and shares one Redis. The throttling tests set low limits of their own.
+ */
+const UNTHROTTLED = '1000000';
+
 export function loadTestEnv(): TestEnv {
   const raw = process.env;
   const database = testDatabaseName();
   const overrides = {
     NODE_ENV: 'test',
     LOG_LEVEL: raw.TEST_LOG_LEVEL ?? 'silent',
+    THROTTLE_AUTH_PER_MINUTE: UNTHROTTLED,
+    THROTTLE_ACCOUNT_PER_MINUTE: UNTHROTTLED,
+    THROTTLE_GSTIN_PER_MINUTE: UNTHROTTLED,
     DATABASE_URL_OWNER: onDatabase(raw.DATABASE_URL_OWNER, database),
     DATABASE_URL_APP: onDatabase(raw.DATABASE_URL_APP, database),
     DATABASE_URL_PLATFORM: onDatabase(raw.DATABASE_URL_PLATFORM, database),
