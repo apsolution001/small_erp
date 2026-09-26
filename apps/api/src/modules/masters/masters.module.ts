@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { ItemCategoriesController } from './item-categories/item-categories.controller.js';
+import { ItemCategoriesRepository } from './item-categories/item-categories.repository.js';
+import { ItemCategoriesService } from './item-categories/item-categories.service.js';
 import { TaxRatesController } from './tax-rates/tax-rates.controller.js';
 import { TaxRatesRepository } from './tax-rates/tax-rates.repository.js';
 import { TaxRatesService } from './tax-rates/tax-rates.service.js';
@@ -11,8 +14,15 @@ import { UnitsService } from './units/units.service.js';
  * parties. Every repository works in the request's tenant transaction (`TransactionHost`).
  */
 @Module({
-  controllers: [UnitsController, TaxRatesController],
-  providers: [UnitsRepository, UnitsService, TaxRatesRepository, TaxRatesService],
-  exports: [UnitsService, TaxRatesService],
+  controllers: [UnitsController, TaxRatesController, ItemCategoriesController],
+  providers: [
+    UnitsRepository,
+    UnitsService,
+    TaxRatesRepository,
+    TaxRatesService,
+    ItemCategoriesRepository,
+    ItemCategoriesService,
+  ],
+  exports: [UnitsService, TaxRatesService, ItemCategoriesService],
 })
 export class MastersModule {}

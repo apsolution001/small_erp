@@ -41,6 +41,14 @@ export class ValidationError extends DomainError {
     super('VALIDATION_FAILED', message);
   }
 
+  /**
+   * A business rule that belongs to one field and needs data the contract cannot see (another
+   * record, a company setting), so the form can show it next to that field.
+   */
+  static forField(path: string, message: string): ValidationError {
+    return new ValidationError([{ path, message, code: 'custom' }]);
+  }
+
   /** One field error per Zod issue, with the dotted path and Zod's issue code. */
   static fromZod(error: z.core.$ZodError): ValidationError {
     return new ValidationError(
