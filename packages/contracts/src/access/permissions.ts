@@ -168,6 +168,14 @@ export function effectivePermissions(role: {
   return PERMISSIONS.filter((p) => stored.has(p));
 }
 
+/**
+ * A permission that only reads: `:view`, or `:export` (a copy of what the holder can already
+ * view). Free (non-billable) roles may hold only these (BRD §12: free read-only users).
+ */
+export function isReadOnlyPermission(permission: Permission): boolean {
+  return permission.endsWith(':view') || permission.endsWith(':export');
+}
+
 /** True when `granted` (a role's effective permissions) includes `required`. */
 export function hasPermission(
   granted: ReadonlySet<Permission> | readonly Permission[],

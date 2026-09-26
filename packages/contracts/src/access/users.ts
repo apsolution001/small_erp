@@ -82,18 +82,37 @@ export const userInviteSchema = z
 export type UserInvite = z.infer<typeof userInviteSchema>;
 export type UserInviteInput = z.input<typeof userInviteSchema>;
 
+/**
+ * Where an invitation stands. `expired` is derived: pending past `expiresAt`. An expired or
+ * pending invitation still holds its role until it is revoked.
+ */
+export const INVITATION_STATUSES = ['pending', 'accepted', 'revoked', 'expired'] as const;
+export const invitationStatusSchema = z.enum(INVITATION_STATUSES);
+export type InvitationStatus = z.infer<typeof invitationStatusSchema>;
+
 export const invitationResponseSchema = z.object({
   id: uuidSchema,
   email: z.string(),
-  role: refSchema,
+  /** Null only once the invitation is closed and its role was deleted afterwards. */
+  role: refSchema.nullable(),
   allBranches: z.boolean(),
   branchIds: z.array(uuidSchema),
+  status: invitationStatusSchema,
+  /** The user who sent it; null when that user cannot be shown. */
+  invitedBy: refSchema.nullable(),
   expiresAt: timestampSchema,
   acceptedAt: timestampSchema.nullable(),
   revokedAt: timestampSchema.nullable(),
   createdAt: timestampSchema,
 });
 export type InvitationResponse = z.infer<typeof invitationResponseSchema>;
+
+/** `GET /invitations`. */
+export const invitationListQuerySchema = paginationQuerySchema.extend({
+  status: invitationStatusSchema.optional(),
+  sort: sortSchema(['email', 'createdAt', 'expiresAt']).optional(),
+});
+export type InvitationListQuery = z.infer<typeof invitationListQuerySchema>;
 
 /** `PATCH /users/:membershipId`. A membership cannot be moved back to `invited`. */
 export const userUpdateSchema = updateSchema({

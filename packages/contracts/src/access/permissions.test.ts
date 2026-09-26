@@ -6,6 +6,7 @@ import {
   defaultRole,
   effectivePermissions,
   hasPermission,
+  isReadOnlyPermission,
   permissionSchema,
   type Permission,
 } from './permissions.js';
@@ -173,6 +174,22 @@ describe('DEFAULT_ROLES (spec 01 §2, BRD §8.1)', () => {
 
   it('defaultRole throws for an unknown name', () => {
     expect(() => defaultRole('Janitor')).toThrow('Unknown default role "Janitor"');
+  });
+});
+
+describe('isReadOnlyPermission', () => {
+  it('is true for view and export only', () => {
+    expect(isReadOnlyPermission('masters.item:view')).toBe(true);
+    expect(isReadOnlyPermission('masters.party:export')).toBe(true);
+    expect(isReadOnlyPermission('audit.log:view')).toBe(true);
+    expect(isReadOnlyPermission('masters.item:edit')).toBe(false);
+    expect(isReadOnlyPermission('platform.billing:edit')).toBe(false);
+  });
+
+  it('matches the free default roles: CA and Viewer hold only read-only permissions', () => {
+    for (const role of DEFAULT_ROLES.filter((r) => !r.billable)) {
+      expect(role.permissions.every(isReadOnlyPermission), role.name).toBe(true);
+    }
   });
 });
 
