@@ -70,3 +70,12 @@ Run at the repo root on 2026-09-26:
 - Acceptance: the exact-value tests cover 0.5-paise ties (`lineAmount('1','0.005') = 1`), negative amounts (`-0.5 → -1`, credit-note tax split), amounts beyond 2^53 (`2^60`, `i64::MAX × 0.18`, 30-digit line amounts) and allocate sum-back (a property test over 100 random cases plus exact cases). GSTIN tests cover `27AAPFU0939F1ZV` and `29AAGCB7383J1Z4` as valid, wrong check characters as invalid, and all 490 single-character substitutions of each as detected.
 - Runtime dependencies: `decimal.js` and `uuid` only.
 - Review: the `accounting-reviewer` and `code-reviewer` agents could not be spawned from the implementing session, which has no sub-agent tool. The change was self-reviewed against both checklists: GST split by place of supply, line-level HALF_UP, rates as data and rule-46 numbering. Running both agents on this branch before merge is a follow-up.
+
+### Review fixes (2026-09-26)
+
+After the `code-reviewer` and `accounting-reviewer` findings (Decisions 8–12, 15, 17, 18 updated):
+
+- `pnpm format`, then `pnpm lint --force`, `pnpm typecheck --force`, `pnpm test --force` and `pnpm build --force` at the root: 4/4 tasks successful each; `pnpm format:check` clean.
+- `@ekaro/core`: **10 files, 127 tests passed**. Coverage **100%** statements (248/248), branches (144/144), functions (82/82) and lines (226/226).
+- New tests: `toDecimal` re-wraps a foreign decimal.js clone (precision 5 → 40 digits after re-wrap) and rejects hex/binary/octal/exponent/`+`/blank strings; `formatQty` on strings; the exported patterns; `splitTax` options with default cess; `supplyTypeFor` with 96, 99 and legacy codes; `isValidGstin` rejecting 25 and 28; current and place-of-supply code tables; series first-character rule and `seriesWidth`; UQC `NA`.
+- ESLint `no-restricted-imports` for `decimal.js` checked with `eslint --print-config`: active in `packages/contracts`, `apps/api` (including `src/modules/**`, merged with the platform-DB rule) and `apps/web`; absent in `packages/core`.
