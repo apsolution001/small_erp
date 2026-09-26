@@ -1,7 +1,7 @@
 ---
 id: T-102
 title: '@ekaro/contracts: common, permissions, auth, access, masters schemas'
-status: todo
+status: in-progress
 sprint: 1
 area: shared
 depends_on: [T-101]
