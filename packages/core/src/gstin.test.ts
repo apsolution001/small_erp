@@ -53,6 +53,15 @@ describe('isValidGstin', () => {
     expect(isValidGstin(withChecksum('27AAPF10939F1Z'))).toBe(false); // PAN letters
     expect(isValidGstin(withChecksum('99AAPFU0939F1Z'))).toBe(false); // unknown state code
     expect(isValidGstin(withChecksum('00AAPFU0939F1Z'))).toBe(false);
+    expect(isValidGstin(withChecksum('96AAPFU0939F1Z'))).toBe(false); // place of supply only
+  });
+
+  it('rejects the legacy state codes 28 (old Andhra Pradesh) and 25 (Daman and Diu)', () => {
+    const withChecksum = (first14: string): string => first14 + computeGstinChecksum(first14);
+    expect(isValidGstin(withChecksum('37AAPFU0939F1Z'))).toBe(true);
+    expect(isValidGstin(withChecksum('26AAPFU0939F1Z'))).toBe(true);
+    expect(isValidGstin(withChecksum('28AAPFU0939F1Z'))).toBe(false);
+    expect(isValidGstin(withChecksum('25AAPFU0939F1Z'))).toBe(false);
   });
 
   it('is strict about case, whitespace and length', () => {

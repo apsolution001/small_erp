@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { STATES, STATE_CODES, getState, isValidStateCode } from './states.js';
+import {
+  CURRENT_STATE_CODES,
+  LEGACY_STATE_CODES,
+  NON_STATE_PLACES_OF_SUPPLY,
+  PLACE_OF_SUPPLY_CODES,
+  STATES,
+  STATE_CODES,
+  getState,
+  isCurrentStateCode,
+  isValidPlaceOfSupply,
+  isValidStateCode,
+} from './states.js';
 
 describe('STATES', () => {
   it('lists GST state codes 01–38 and 97, in code order, once each', () => {
@@ -36,7 +47,46 @@ describe('STATES', () => {
   });
 
   it('flags the pre-reorganisation codes 25 and 28 as legacy', () => {
-    expect(STATES.filter((s) => s.legacy).map((s) => s.code)).toEqual(['25', '28']);
+    expect(LEGACY_STATE_CODES).toEqual(['25', '28']);
+    expect(STATES.filter((s) => s.legacy).map((s) => s.code)).toEqual([...LEGACY_STATE_CODES]);
+  });
+});
+
+describe('current state codes', () => {
+  it('are every state code except the legacy ones', () => {
+    expect(CURRENT_STATE_CODES).toEqual(STATE_CODES.filter((c) => c !== '25' && c !== '28'));
+    expect(CURRENT_STATE_CODES).toHaveLength(37);
+  });
+
+  it('isCurrentStateCode rejects legacy, place-of-supply-only and unknown codes', () => {
+    expect(isCurrentStateCode('26')).toBe(true);
+    expect(isCurrentStateCode('97')).toBe(true);
+    for (const bad of ['25', '28', '96', '99', '00', '']) {
+      expect(isCurrentStateCode(bad), bad).toBe(false);
+    }
+  });
+});
+
+describe('place of supply codes', () => {
+  it('are the current state codes plus 96 (Other Countries) and 99 (Centre Jurisdiction)', () => {
+    expect(NON_STATE_PLACES_OF_SUPPLY).toEqual([
+      { code: '96', name: 'Other Countries' },
+      { code: '99', name: 'Centre Jurisdiction' },
+    ]);
+    expect(PLACE_OF_SUPPLY_CODES).toEqual([...CURRENT_STATE_CODES, '96', '99']);
+  });
+
+  it('isValidPlaceOfSupply accepts 96 and 99 but not legacy codes', () => {
+    for (const code of ['27', '97', '96', '99'])
+      expect(isValidPlaceOfSupply(code), code).toBe(true);
+    for (const bad of ['25', '28', '98', '39', '']) {
+      expect(isValidPlaceOfSupply(bad), bad).toBe(false);
+    }
+  });
+
+  it('96 and 99 are not states', () => {
+    expect(isValidStateCode('96')).toBe(false);
+    expect(getState('99')).toBeUndefined();
   });
 });
 

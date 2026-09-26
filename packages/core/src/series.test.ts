@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DOC_NUMBER_MAX_LENGTH, formatDocNumber, maxDocNumber, validateSeries } from './series.js';
+import {
+  DOC_NUMBER_MAX_LENGTH,
+  formatDocNumber,
+  maxDocNumber,
+  seriesWidth,
+  validateSeries,
+} from './series.js';
 
 const SI = { prefix: 'SI/26-27/', suffix: '', padding: 4 };
 
@@ -34,7 +40,7 @@ describe('formatDocNumber', () => {
 describe('validateSeries', () => {
   it('accepts the default series', () => {
     expect(validateSeries({ ...SI, nextNumber: 1n })).toEqual([]);
-    expect(validateSeries({ prefix: '', suffix: '', padding: 8 })).toEqual([]);
+    expect(validateSeries({ prefix: '', suffix: '', padding: 1 })).toEqual([]);
     expect(validateSeries({ prefix: 'ABCDEFGHIJ', suffix: '/2627', padding: 1 })).toEqual([]); // 16
   });
 
@@ -84,11 +90,42 @@ describe('validateSeries', () => {
     ]);
   });
 
+  it('requires the first rendered character to be A-Z, a-z or 1-9 (e-invoice)', () => {
+    for (const prefix of ['/SI', '-SI', '0SI']) {
+      expect(validateSeries({ ...SI, prefix }), prefix).toEqual([
+        { code: 'INVALID_FIRST_CHARACTER', field: 'prefix' },
+      ]);
+    }
+    expect(validateSeries({ ...SI, prefix: '1SI/' })).toEqual([]);
+    expect(validateSeries({ ...SI, prefix: 'si/' })).toEqual([]);
+  });
+
+  it('without a prefix, the padding must not render a leading zero', () => {
+    const bare = { prefix: '', suffix: '/A', padding: 4 };
+    expect(validateSeries(bare)).toEqual([{ code: 'INVALID_FIRST_CHARACTER', field: 'padding' }]);
+    expect(validateSeries({ ...bare, nextNumber: 999n })).toEqual([
+      { code: 'INVALID_FIRST_CHARACTER', field: 'padding' },
+    ]);
+    // From 1000 on, every number fills the padding, so none starts with 0.
+    expect(validateSeries({ ...bare, nextNumber: 1000n })).toEqual([]);
+    expect(() => formatDocNumber(bare, 7)).toThrow(RangeError);
+    expect(formatDocNumber(bare, 1000)).toBe('1000/A');
+  });
+
   it('rejects a next number that has outgrown the space left', () => {
     expect(validateSeries({ ...SI, nextNumber: 9999999n })).toEqual([]);
     expect(validateSeries({ ...SI, nextNumber: 10000000n })).toEqual([
       { code: 'NUMBER_TOO_LONG', field: 'nextNumber' },
     ]);
+  });
+});
+
+describe('seriesWidth', () => {
+  it('is the width of the largest of the padded capacity and the next number', () => {
+    expect(seriesWidth(SI)).toBe(13);
+    expect(seriesWidth({ ...SI, nextNumber: 123456n })).toBe(15);
+    expect(seriesWidth({ ...SI, nextNumber: 99n })).toBe(13);
+    expect(seriesWidth({ prefix: 'INV-', suffix: '/A', padding: 3, nextNumber: 5 })).toBe(9);
   });
 });
 

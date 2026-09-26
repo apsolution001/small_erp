@@ -1,6 +1,7 @@
 import { Decimal, type DecimalLike, toDecimal } from './decimal.js';
 
-const PAISE_PATTERN = /^-?\d+$/;
+/** Money on the wire (ADR 0005): a string of integer paise such as `"1234550"`. */
+export const PAISE_PATTERN = /^-?\d+$/;
 const RUPEES_PATTERN = /^(-?)(\d+)(?:\.(\d{1,2}))?$/;
 
 /** A ratio for {@link Money.allocate}: a non-negative Decimal, decimal string or bigint. */
