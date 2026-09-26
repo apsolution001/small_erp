@@ -38,6 +38,8 @@ export const memberships = tenantTable(
   (t) => [
     unique('memberships_tenant_user_unique').on(t.tenantId, t.userId),
     unique('memberships_tenant_id_unique').on(t.tenantId, t.id),
+    // Target of sessions_membership_user_fk: a session's membership belongs to its user.
+    unique('memberships_id_user_unique').on(t.id, t.userId),
     foreignKey({
       name: 'memberships_role_fk',
       columns: [t.tenantId, t.roleId],

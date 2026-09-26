@@ -2,7 +2,6 @@ import { uuidv7 } from '@ekaro/core';
 import { describe, expect, it } from 'vitest';
 import { type DomainError } from '../../../common/errors/domain-error.js';
 import { type AccessSnapshot } from '../../access/index.js';
-import { isLocked, lockoutEnd } from '../users/lockout.js';
 import { assertUsableSession } from './session-rules.js';
 
 const snapshot: AccessSnapshot = {
@@ -48,20 +47,5 @@ describe('assertUsableSession', () => {
     expect(failure({ ...snapshot, tenantStatus: 'closed' })).toEqual([403, 'TENANT_SUSPENDED']);
     expect(failure({ ...snapshot, membershipStatus: 'disabled' })).toEqual([403, 'FORBIDDEN']);
     expect(failure({ ...snapshot, membershipStatus: 'invited' })).toEqual([403, 'FORBIDDEN']);
-  });
-});
-
-describe('lockout', () => {
-  const now = new Date('2026-09-26T10:00:00.000Z');
-
-  it('locks for 15 minutes', () => {
-    expect(lockoutEnd(now)).toEqual(new Date('2026-09-26T10:15:00.000Z'));
-  });
-
-  it('is locked strictly before the end', () => {
-    const lockedUntil = lockoutEnd(now);
-    expect(isLocked({ lockedUntil }, now)).toBe(true);
-    expect(isLocked({ lockedUntil }, lockedUntil)).toBe(false);
-    expect(isLocked({ lockedUntil: null }, now)).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { check, pgTable, text } from 'drizzle-orm/pg-core';
 import { citext, primaryId, timestamps, timestamptz } from '../../../infra/db/base-columns.js';
 import { inList, lengthBetween } from '../../../infra/db/checks.js';
 
@@ -25,9 +25,6 @@ export const users = pgTable(
     /** AES-256-GCM with `DATA_ENCRYPTION_KEY` (TOTP, Sprint 1b). */
     totpSecretEnc: text(),
     status: text({ enum: USER_STATUSES }).notNull().default('active'),
-    /** Consecutive failed logins since the last success or lockout. */
-    failedLoginCount: integer().notNull().default(0),
-    lockedUntil: timestamptz(),
     lastLoginAt: timestamptz(),
     ...timestamps(),
   },
@@ -37,7 +34,6 @@ export const users = pgTable(
     check('users_full_name_length', lengthBetween(t.fullName, 1, 120)),
     check('users_password_hash_bcrypt', sql`${t.passwordHash} ~ '^\\$2[aby]\\$[0-9]{2}\\$'`),
     check('users_status_valid', inList(t.status, USER_STATUSES)),
-    check('users_failed_login_count_non_negative', sql`${t.failedLoginCount} >= 0`),
   ],
 );
 

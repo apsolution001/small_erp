@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { hashRefreshToken } from '../../src/modules/auth/sessions/refresh-token.js';
 import { refreshTokens } from '../../src/modules/auth/sessions/refresh-tokens.schema.js';
+import { sessions } from '../../src/modules/auth/sessions/sessions.schema.js';
 import { users } from '../../src/modules/auth/users/users.schema.js';
 import { TenantBootstrapService } from '../../src/modules/platform/index.js';
 import { cancelledGstin } from '../factories/gstin.js';
@@ -65,13 +66,15 @@ describe('POST /api/v1/auth/signup', () => {
       expect(Math.round((trialEnds - Date.now()) / DAY_MS)).toBe(14);
     });
 
-    it('sets the refresh cookie httpOnly, Secure, SameSite=Strict on /api/v1/auth for 30 days', () => {
+    it('sets the __Secure- refresh cookie httpOnly, Secure, SameSite=Strict on /api/v1/auth for 7 days', () => {
+      expect(setCookie).toMatch(/^__Secure-ekaro_refresh=[\w-]{43};/);
       const attributes = setCookie?.split('; ').slice(1) ?? [];
       expect(attributes).toEqual(
         expect.arrayContaining(['Path=/api/v1/auth', 'HttpOnly', 'Secure', 'SameSite=Strict']),
       );
       const expires = Date.parse(attributes.find((a) => a.startsWith('Expires='))?.slice(8) ?? '');
-      expect(Math.round((expires - Date.now()) / DAY_MS)).toBe(30);
+      // Idle lifetime; the session itself ends 30 days after signup whatever the activity.
+      expect(Math.round((expires - Date.now()) / DAY_MS)).toBe(7);
       expect(JSON.stringify(owner.body)).not.toContain(owner.refreshToken);
     });
 
@@ -82,7 +85,8 @@ describe('POST /api/v1/auth/signup', () => {
       const tokens = await db
         .select({ tokenHash: refreshTokens.tokenHash, revokedAt: refreshTokens.revokedAt })
         .from(refreshTokens)
-        .where(eq(refreshTokens.userId, owner.body.user.id));
+        .innerJoin(sessions, eq(sessions.id, refreshTokens.familyId))
+        .where(eq(sessions.userId, owner.body.user.id));
       expect(tokens).toEqual([
         { tokenHash: hashRefreshToken(owner.refreshToken), revokedAt: null },
       ]);

@@ -14,12 +14,24 @@ const valid: RawEnv = {
   JWT_ACCESS_TTL_SECONDS: '900',
   JWT_ISSUER: 'ekaro-api',
   JWT_AUDIENCE: 'ekaro-web',
-  REFRESH_TOKEN_TTL_DAYS: '30',
+  SESSION_IDLE_DAYS: '7',
+  SESSION_ABSOLUTE_DAYS: '30',
   DATA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   GSP_PROVIDER: 'mock',
   SMTP_HOST: 'localhost',
   SMTP_PORT: '1025',
   MAIL_FROM: 'Ekaro <no-reply@ekaro.local>',
+};
+
+/**
+ * Production with a real secret and an explicit proxy hop count. It still fails on
+ * `GSP_PROVIDER`: only the mock adapter exists yet, and production refuses it.
+ */
+const production: RawEnv = {
+  ...valid,
+  NODE_ENV: 'production',
+  JWT_ACCESS_SECRET: 'a-production-secret-that-is-at-least-32-chars',
+  TRUST_PROXY_HOPS: '1',
 };
 
 function errorOf(raw: RawEnv): EnvValidationError {
@@ -37,7 +49,8 @@ describe('parseEnv', () => {
     const env = parseEnv(valid);
     expect(env.PORT).toBe(3000);
     expect(env.JWT_ACCESS_TTL_SECONDS).toBe(900);
-    expect(env.REFRESH_TOKEN_TTL_DAYS).toBe(30);
+    expect(env.SESSION_IDLE_DAYS).toBe(7);
+    expect(env.SESSION_ABSOLUTE_DAYS).toBe(30);
     expect(env.SMTP_PORT).toBe(1025);
     expect(env.DB_POOL_MAX).toBe(10);
     expect(env.DATABASE_URL_PLATFORM).toBe(valid.DATABASE_URL_PLATFORM);
@@ -56,13 +69,37 @@ describe('parseEnv', () => {
     expect(parseEnv({ ...valid, REFRESH_COOKIE_SECURE: 'false' }).REFRESH_COOKIE_SECURE).toBe(
       false,
     );
-    const error = errorOf({
-      ...valid,
-      NODE_ENV: 'production',
-      JWT_ACCESS_SECRET: 'a-production-secret-that-is-at-least-32-chars',
-      REFRESH_COOKIE_SECURE: 'false',
-    });
-    expect(error.issues.map((i) => i.variable)).toEqual(['REFRESH_COOKIE_SECURE']);
+    const error = errorOf({ ...production, REFRESH_COOKIE_SECURE: 'false' });
+    expect(error.issues.map((i) => i.variable)).toEqual(['REFRESH_COOKIE_SECURE', 'GSP_PROVIDER']);
+  });
+
+  it('refuses the mock GSP in production', () => {
+    expect(errorOf(production).issues).toEqual([
+      { variable: 'GSP_PROVIDER', message: 'the mock GSP must not be used in production' },
+    ]);
+  });
+
+  it('requires TRUST_PROXY_HOPS to be set explicitly in production (0 is allowed)', () => {
+    const { TRUST_PROXY_HOPS: _t, ...unset } = production;
+    expect(errorOf(unset).issues.map((i) => i.variable)).toEqual([
+      'GSP_PROVIDER',
+      'TRUST_PROXY_HOPS',
+    ]);
+    expect(errorOf({ ...production, TRUST_PROXY_HOPS: '0' }).issues.map((i) => i.variable)).toEqual(
+      ['GSP_PROVIDER'],
+    );
+    expect(parseEnv({ ...valid, TRUST_PROXY_HOPS: undefined }).TRUST_PROXY_HOPS).toBe(0);
+  });
+
+  it('defaults the session lifetimes (7 days idle, 30 days absolute) and keeps idle within absolute', () => {
+    const { SESSION_IDLE_DAYS: _i, SESSION_ABSOLUTE_DAYS: _a, ...rest } = valid;
+    const env = parseEnv(rest);
+    expect([env.SESSION_IDLE_DAYS, env.SESSION_ABSOLUTE_DAYS]).toEqual([7, 30]);
+    expect(
+      errorOf({ ...valid, SESSION_IDLE_DAYS: '31', SESSION_ABSOLUTE_DAYS: '30' }).issues,
+    ).toEqual([
+      { variable: 'SESSION_IDLE_DAYS', message: 'must not exceed SESSION_ABSOLUTE_DAYS' },
+    ]);
   });
 
   it('rejects an out-of-range proxy hop count', () => {
@@ -131,11 +168,10 @@ describe('parseEnv', () => {
 
   it('rejects the example JWT secret in production', () => {
     const error = errorOf({
-      ...valid,
-      NODE_ENV: 'production',
+      ...production,
       JWT_ACCESS_SECRET: 'change-me-to-a-long-random-string-at-least-32-chars',
     });
-    expect(error.issues.map((i) => i.variable)).toEqual(['JWT_ACCESS_SECRET']);
+    expect(error.issues.map((i) => i.variable)).toEqual(['JWT_ACCESS_SECRET', 'GSP_PROVIDER']);
   });
 
   it('rejects an unknown GSP provider and log level', () => {

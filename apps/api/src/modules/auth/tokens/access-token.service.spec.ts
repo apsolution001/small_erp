@@ -106,17 +106,64 @@ describe('AccessTokenService: access tokens (ADR 0006)', () => {
     );
     expect((await rejection(tokens.verifyAccess(token))).code).toBe('TOKEN_INVALID');
   });
+
+  it('rejects a well-signed token without an expiry', async () => {
+    const { tokens } = setup();
+    const token = await new JwtService({ secret: env.JWT_ACCESS_SECRET }).signAsync(
+      {
+        tid: claims.tenantId,
+        mid: claims.membershipId,
+        sid: claims.sessionId,
+        iat: T0.getTime() / 1000,
+      },
+      { subject: claims.userId, issuer: 'ekaro-api', audience: 'ekaro-web' },
+    );
+    expect((await rejection(tokens.verifyAccess(token))).code).toBe('TOKEN_INVALID');
+  });
 });
 
 describe('AccessTokenService: tenant-selection tokens', () => {
   it('round-trips the user for 5 minutes and cannot be used as an access token', async () => {
     const { clock, tokens } = setup();
     const token = await tokens.signSelection(claims.userId);
-    expect(await tokens.verifySelection(token)).toBe(claims.userId);
+    const selection = await tokens.verifySelection(token);
+    expect(selection).toEqual({
+      userId: claims.userId,
+      tokenId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
+      expiresAt: new Date(T0.getTime() + SELECTION_TOKEN_TTL_SECONDS * 1000),
+    });
     expect((await rejection(tokens.verifyAccess(token))).code).toBe('TOKEN_INVALID');
 
     clock.current = new Date(T0.getTime() + (SELECTION_TOKEN_TTL_SECONDS + 1) * 1000);
     expect((await rejection(tokens.verifySelection(token))).code).toBe('TOKEN_EXPIRED');
+  });
+
+  it('gives every selection token its own id (jti), so it can be used only once', async () => {
+    const { tokens } = setup();
+    const a = await tokens.verifySelection(await tokens.signSelection(claims.userId));
+    const b = await tokens.verifySelection(await tokens.signSelection(claims.userId));
+    expect(a.tokenId).not.toBe(b.tokenId);
+  });
+
+  it('rejects a selection token without an id or an expiry', async () => {
+    const { tokens } = setup();
+    const jwt = new JwtService({ secret: env.JWT_ACCESS_SECRET });
+    const base = {
+      subject: claims.userId,
+      issuer: 'ekaro-api',
+      audience: 'ekaro-web:tenant_selection',
+    };
+    const noId = await jwt.signAsync(
+      { purpose: 'tenant_selection', iat: T0.getTime() / 1000 },
+      { ...base, expiresIn: 60 },
+    );
+    const noExpiry = await jwt.signAsync(
+      { purpose: 'tenant_selection', iat: T0.getTime() / 1000 },
+      { ...base, jwtid: uuidv7() },
+    );
+    for (const bad of [noId, noExpiry]) {
+      expect((await rejection(tokens.verifySelection(bad))).code).toBe('TOKEN_INVALID');
+    }
   });
 
   it('does not accept an access token as a selection token', async () => {
