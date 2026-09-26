@@ -9,6 +9,7 @@ import { HealthModule } from './infra/health/health.module.js';
 import { buildLoggerParams } from './infra/logging/logger.options.js';
 import { TenancyModule } from './infra/tenancy/tenancy.module.js';
 import { AccessModule, PermissionGuard } from './modules/access/index.js';
+import { AuditModule } from './modules/audit/audit.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard.js';
 import { PlatformModule } from './modules/platform/index.js';
@@ -28,6 +29,7 @@ export class AppModule {
         PlatformModule,
         AccessModule,
         AuthModule,
+        AuditModule,
       ],
       providers: [
         { provide: APP_FILTER, useClass: ProblemDetailsFilter },
