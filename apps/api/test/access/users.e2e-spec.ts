@@ -17,7 +17,9 @@ import {
 } from '../support/access.js';
 import { createTestApp, http } from '../support/app.js';
 import { bearer, me, type SignedUp, signUp } from '../support/auth.js';
-import { withOwnerClient, withTenantConnection } from '../support/db.js';
+import { eq } from 'drizzle-orm';
+import { tenants } from '../../src/modules/platform/tenants/tenants.schema.js';
+import { testPlatformDb, withOwnerClient, withTenantConnection } from '../support/db.js';
 import { loadTestEnv } from '../support/test-env.js';
 
 const userPage = paginated(userResponseSchema);
@@ -739,6 +741,29 @@ describe('tenant users (spec 01 §3.3)', () => {
         expect(problem((await accept({ token }).expect(404)).body).code).toBe('INVITATION_INVALID');
       }
       await accept({ token: 'x', extra: true }).expect(422);
+    });
+
+    it('refuses to join a company that is no longer active (403 TENANT_SUSPENDED)', async () => {
+      const c = await signUp(app);
+      const viewerRole = await roleNamed(app, c.body.accessToken, 'Viewer');
+      const created = invitationResponseSchema.parse(
+        (
+          await http(app)
+            .post('/api/v1/users')
+            .set('Authorization', bearer(c.body.accessToken))
+            .send({ email: `susp-${crypto.randomUUID()}@example.com`, roleId: viewerRole.id })
+            .expect(201)
+        ).body,
+      );
+      const { token } = await outboxInvitation(c.body.tenant.id, created.id);
+      await testPlatformDb()
+        .update(tenants)
+        .set({ status: 'suspended' })
+        .where(eq(tenants.id, c.body.tenant.id));
+      for (const res of [await preview(token), await accept({ token })]) {
+        expect(res.status).toBe(403);
+        expect(problem(res.body).code).toBe('TENANT_SUSPENDED');
+      }
     });
 
     it('a user who became a member meanwhile gets 409 and the invitation stays open', async () => {
