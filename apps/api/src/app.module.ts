@@ -11,6 +11,7 @@ import { TenancyModule } from './infra/tenancy/tenancy.module.js';
 import { AccessModule, PermissionGuard } from './modules/access/index.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard.js';
+import { MastersModule } from './modules/masters/index.js';
 import { PlatformModule } from './modules/platform/index.js';
 
 /** Root module. Built from an already-validated {@link Env} so tests can pass their own. */
@@ -28,6 +29,7 @@ export class AppModule {
         PlatformModule,
         AccessModule,
         AuthModule,
+        MastersModule,
       ],
       providers: [
         { provide: APP_FILTER, useClass: ProblemDetailsFilter },

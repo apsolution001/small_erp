@@ -1,4 +1,5 @@
 export const PG_UNIQUE_VIOLATION = '23505';
+export const PG_FOREIGN_KEY_VIOLATION = '23503';
 
 interface PgErrorFields {
   readonly code: string;
@@ -33,5 +34,17 @@ export function isUniqueViolation(error: unknown, constraint?: string): boolean 
   const pg = findPgError(error);
   return (
     pg?.code === PG_UNIQUE_VIOLATION && (constraint === undefined || pg.constraint === constraint)
+  );
+}
+
+/**
+ * True for a foreign-key violation, optionally of one named constraint. Deleting a referenced
+ * row raises it with the referencing table's constraint name.
+ */
+export function isForeignKeyViolation(error: unknown, constraint?: string): boolean {
+  const pg = findPgError(error);
+  return (
+    pg?.code === PG_FOREIGN_KEY_VIOLATION &&
+    (constraint === undefined || pg.constraint === constraint)
   );
 }

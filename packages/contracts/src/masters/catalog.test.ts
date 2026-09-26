@@ -4,6 +4,7 @@ import { pathsOf, unrecognizedKeysOf } from '../testing/paths.js';
 import {
   itemCategoryCreateSchema,
   itemCategoryListQuerySchema,
+  itemCategoryRecordSchema,
   itemCategoryResponseSchema,
   itemCategoryTreeNodeSchema,
   itemCategoryUpdateSchema,
@@ -14,6 +15,7 @@ import {
   itemRecordSchema,
   itemResponseSchema,
   itemTaxRateCreateSchema,
+  itemTaxRateListQuerySchema,
   itemUpdateSchema,
 } from './item.js';
 import {
@@ -26,6 +28,7 @@ import {
 import {
   unitCreateSchema,
   unitListQuerySchema,
+  unitRecordSchema,
   unitResponseSchema,
   unitUpdateSchema,
   uqcSchema,
@@ -93,6 +96,21 @@ describe('unit schemas', () => {
       isActive: true,
     };
     expect(unitResponseSchema.parse(row)).toEqual(row);
+  });
+
+  it('the record schema checks a merged unit and strips the stored metadata', () => {
+    const stored = { ...meta, code: 'KGS', name: 'Kilograms', uqc: 'KGS', decimalPlaces: 3 };
+    const merged = { ...stored, isActive: true, decimalPlaces: 2 };
+    expect(unitRecordSchema.parse(merged)).toEqual({
+      code: 'KGS',
+      name: 'Kilograms',
+      uqc: 'KGS',
+      decimalPlaces: 2,
+      isActive: true,
+    });
+    expect(pathsOf(unitRecordSchema.safeParse({ ...merged, decimalPlaces: 7 }))).toEqual([
+      'decimalPlaces',
+    ]);
   });
 });
 
@@ -207,6 +225,18 @@ describe('item category schemas', () => {
     );
     expect(pathsOf(itemCategoryListQuerySchema.safeParse({ sort: 'parentId:asc' }))).toEqual([
       'sort',
+    ]);
+  });
+
+  it('the record schema checks a merged category and strips the stored metadata', () => {
+    const stored = { ...meta, parentId: null, name: 'Steel', isActive: true };
+    expect(itemCategoryRecordSchema.parse({ ...stored, name: ' Metals ' })).toEqual({
+      parentId: null,
+      name: 'Metals',
+      isActive: true,
+    });
+    expect(pathsOf(itemCategoryRecordSchema.safeParse({ ...stored, parentId: 'x' }))).toEqual([
+      'parentId',
     ]);
   });
 
@@ -401,6 +431,12 @@ describe('item schemas', () => {
         itemTaxRateCreateSchema.safeParse({ taxRateId, effectiveFrom: '2025-09-22', gstRate: '5' }),
       ),
     ).toEqual(['gstRate']);
+    expect(itemTaxRateListQuerySchema.parse({})).toEqual({});
+    expect(itemTaxRateListQuerySchema.parse({ on: '2026-05-01' })).toEqual({ on: '2026-05-01' });
+    expect(pathsOf(itemTaxRateListQuerySchema.safeParse({ on: '01-05-2026' }))).toEqual(['on']);
+    expect(unrecognizedKeysOf(itemTaxRateListQuerySchema.safeParse({ page: '1' }))).toEqual([
+      'page',
+    ]);
     expect(
       itemListQuerySchema.parse({ kind: 'raw_material', active: 'true', sort: 'hsnSac:asc' }),
     ).toMatchObject({ kind: 'raw_material', active: true, sort: 'hsnSac:asc' });

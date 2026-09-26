@@ -21,6 +21,13 @@ const unitFields = {
   isActive: z.boolean(),
 };
 
+/**
+ * The whole unit. Units have no cross-field rules, but `PATCH /units/:id` still parses
+ * `{ ...existing, ...patch }` with it, like every master, so a rule added later applies at once.
+ */
+export const unitRecordSchema = z.object(unitFields);
+export type UnitRecord = z.output<typeof unitRecordSchema>;
+
 export const unitResponseSchema = z.object({
   ...recordMetaShape,
   code: z.string(),

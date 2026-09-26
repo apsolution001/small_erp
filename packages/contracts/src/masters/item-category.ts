@@ -14,6 +14,13 @@ const itemCategoryFields = {
   isActive: z.boolean(),
 };
 
+/**
+ * The whole category. `PATCH /item-categories/:id` parses `{ ...existing, ...patch }` with it; the
+ * depth and cycle rules need the tree, so the service checks them.
+ */
+export const itemCategoryRecordSchema = z.object(itemCategoryFields);
+export type ItemCategoryRecord = z.output<typeof itemCategoryRecordSchema>;
+
 export const itemCategoryResponseSchema = z.object({
   ...recordMetaShape,
   parentId: uuidSchema.nullable(),

@@ -158,6 +158,14 @@ export const itemTaxRateCreateSchema = z.strictObject({
 });
 export type ItemTaxRateCreate = z.infer<typeof itemTaxRateCreateSchema>;
 
+/**
+ * `GET /items/:id/tax-rates` (`masters.item_tax_rate:view`): every row, oldest first, or with
+ * `?on=YYYY-MM-DD` only the row in force on that date (the latest `effectiveFrom <= on`; none
+ * before the first row).
+ */
+export const itemTaxRateListQuerySchema = z.strictObject({ on: isoDateSchema.optional() });
+export type ItemTaxRateListQuery = z.infer<typeof itemTaxRateListQuerySchema>;
+
 export const itemResponseSchema = z.object({
   ...recordMetaShape,
   code: z.string(),
