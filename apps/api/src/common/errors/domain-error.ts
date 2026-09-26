@@ -73,6 +73,14 @@ export class ConflictError extends DomainError {
   readonly status = 409;
 }
 
+/** 409 `VERSION_CONFLICT`: an update sent a `version` that is no longer current. */
+export function versionConflict(): ConflictError {
+  return new ConflictError(
+    'VERSION_CONFLICT',
+    'This record was changed by someone else. Reload it and try again.',
+  );
+}
+
 /** 423: the resource is locked for now (an account after repeated failed logins). */
 export class LockedError extends DomainError {
   readonly status = 423;

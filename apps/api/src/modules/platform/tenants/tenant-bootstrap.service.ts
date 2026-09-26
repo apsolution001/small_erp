@@ -1,10 +1,10 @@
 import { currentFy } from '@ekaro/core';
 import { type GstinLookupResponse } from '@ekaro/contracts';
 import { Injectable } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
 import { ClsService } from 'nestjs-cls';
 import { type DbTransaction } from '../../../infra/db/db-executor.js';
 import { type RequestContext } from '../../../infra/tenancy/request-context.js';
+import { applyTransactionContext } from '../../../infra/tenancy/transaction-context.js';
 import { ensureOwnerMembership, seedSystemRoles } from '../../access/index.js';
 import { seedTenantMasters } from '../../masters/index.js';
 
@@ -36,11 +36,11 @@ export class TenantBootstrapService {
   constructor(private readonly cls: ClsService<RequestContext>) {}
 
   async bootstrap(tx: DbTransaction, input: TenantBootstrapInput): Promise<TenantBootstrapResult> {
-    const requestId = this.cls.isActive() ? this.cls.get('requestId') : '';
-    await tx.execute(sql`select
-      set_config('app.tenant_id', ${input.tenantId}, true),
-      set_config('app.user_id', ${input.ownerUserId}, true),
-      set_config('app.request_id', ${requestId}, true)`);
+    await applyTransactionContext(tx, {
+      tenantId: input.tenantId,
+      userId: input.ownerUserId,
+      requestId: this.cls.isActive() ? this.cls.get('requestId') : undefined,
+    });
 
     const { registration } = input;
     const { headOfficeBranchId } = await seedTenantMasters(tx, input.tenantId, {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { findPgError, isUniqueViolation } from './pg-errors.js';
+import {
+  findPgError,
+  isCheckViolation,
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from './pg-errors.js';
 
 const pgError = (code: string, constraint?: string) =>
   Object.assign(new Error('driver error'), { code, severity: 'ERROR', constraint });
@@ -18,6 +23,17 @@ describe('pg errors', () => {
     expect(isUniqueViolation(error, 'users_email_unique')).toBe(true);
     expect(isUniqueViolation(error, 'tenants_slug_unique')).toBe(false);
     expect(isUniqueViolation(pgError('23503'))).toBe(false);
+  });
+
+  it('recognises foreign-key and check violations', () => {
+    const fk = new Error('Failed query', { cause: pgError('23503', 'memberships_role_fk') });
+    expect(isForeignKeyViolation(fk)).toBe(true);
+    expect(isForeignKeyViolation(fk, 'memberships_role_fk')).toBe(true);
+    expect(isForeignKeyViolation(fk, 'invitations_role_fk')).toBe(false);
+    expect(isCheckViolation(fk)).toBe(false);
+    const check = pgError('23514', 'invitations_role_while_pending');
+    expect(isCheckViolation(check, 'invitations_role_while_pending')).toBe(true);
+    expect(isUniqueViolation(check)).toBe(false);
   });
 
   it('ignores Node system errors, which have a code but no severity', () => {

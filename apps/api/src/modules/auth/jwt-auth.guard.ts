@@ -53,6 +53,7 @@ export class JwtAuthGuard implements CanActivate {
       sessionId: claims.sessionId,
       roleId: access.role.id,
       roleName: access.role.name,
+      isOwner: access.role.isOwner,
       permissions: new Set(access.permissions),
       allBranches: access.allBranches,
       branchIds: access.branchIds,

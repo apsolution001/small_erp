@@ -51,6 +51,7 @@ const principal = (permissions: Permission[]): Principal => ({
   sessionId: 's',
   roleId: 'r',
   roleName: 'Sales',
+  isOwner: false,
   permissions: new Set(permissions),
   allBranches: true,
   branchIds: [],

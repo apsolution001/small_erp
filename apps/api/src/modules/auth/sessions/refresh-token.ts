@@ -1,24 +1,14 @@
-import { createHash, randomBytes } from 'node:crypto';
+/**
+ * Refresh tokens are opaque 256-bit secrets; only the digest is stored
+ * (`refresh_tokens.token_hash`) and the token itself lives in the cookie.
+ */
+export {
+  hashOpaqueToken as hashRefreshToken,
+  isWellFormedOpaqueToken as isWellFormedRefreshToken,
+  newOpaqueToken as newRefreshToken,
+} from '../../../common/crypto/opaque-token.js';
 
-const TOKEN_BYTES = 32;
-/** 32 bytes in unpadded base64url. */
-const TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** A new opaque refresh token: 256 random bits (security standard), base64url. */
-export function newRefreshToken(): string {
-  return randomBytes(TOKEN_BYTES).toString('base64url');
-}
-
-/** Only this digest is stored (`refresh_tokens.token_hash`); the token lives in the cookie. */
-export function hashRefreshToken(token: string): string {
-  return createHash('sha256').update(token, 'utf8').digest('hex');
-}
-
-/** Screens a cookie value before it reaches the database. */
-export function isWellFormedRefreshToken(value: string): boolean {
-  return TOKEN_FORMAT.test(value);
-}
 
 export function refreshExpiry(now: Date, ttlDays: number): Date {
   return new Date(now.getTime() + ttlDays * DAY_MS);
