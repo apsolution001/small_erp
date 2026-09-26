@@ -1,7 +1,7 @@
 ---
 id: T-106
 title: 'Masters API: company, branches, godowns, document series'
-status: todo
+status: in-progress
 sprint: 1
 area: server
 depends_on: [T-104]

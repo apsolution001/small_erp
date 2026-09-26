@@ -34,6 +34,11 @@ export const documentSeries = tenantTable(
     nextNumber: bigint({ mode: 'bigint' })
       .notNull()
       .default(sql`1`),
+    /**
+     * The last number issued; null while the series has issued nothing. Set only by number
+     * allocation (Sprint 2). Once set, the numbering fields are fixed (a trigger enforces it).
+     */
+    lastIssuedNumber: bigint({ mode: 'bigint' }),
     isDefault: boolean().notNull().default(false),
   },
   (t) => [
@@ -67,6 +72,11 @@ export const documentSeries = tenantTable(
     ),
     check('document_series_padding_range', sql`${t.padding} between 1 and 8`),
     check('document_series_next_number_positive', sql`${t.nextNumber} >= 1`),
+    // Numbers are gapless: after issuing n, the next number is n + 1.
+    check(
+      'document_series_next_follows_last_issued',
+      sql`${t.lastIssuedNumber} is null or (${t.lastIssuedNumber} >= 1 and ${t.nextNumber} = ${t.lastIssuedNumber} + 1)`,
+    ),
     check(
       'document_series_number_length',
       sql`char_length(${t.prefix}) + greatest(${t.padding}, char_length(${t.nextNumber}::text)) + char_length(${t.suffix}) <= ${sql.raw(String(DOC_NUMBER_MAX_LENGTH))}`,

@@ -50,6 +50,20 @@
       "when": 1790404486090,
       "tag": "0006_t107_masters_catalog_security",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790405830854,
+      "tag": "0007_t106_masters_org",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790405832588,
+      "tag": "0008_t106_masters_org_security",
+      "breakpoints": true
     }
   ]
 }

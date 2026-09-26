@@ -14,7 +14,7 @@ import {
   companyResponseSchema,
   companyUpdateSchema,
 } from './company.js';
-import { DOC_TYPES } from './doc-types.js';
+import { DOC_TYPES, docNumberFamily } from './doc-types.js';
 import {
   documentSeriesCreateSchema,
   documentSeriesListQuerySchema,
@@ -24,6 +24,7 @@ import {
 } from './document-series.js';
 import {
   godownCreateSchema,
+  godownRecordSchema,
   godownListQuerySchema,
   godownResponseSchema,
   godownUpdateSchema,
@@ -259,6 +260,20 @@ describe('godown schemas', () => {
     expect(pathsOf(godownListQuerySchema.safeParse({ sort: 'address:asc' }))).toEqual(['sort']);
   });
 
+  it('the record schema checks a merged godown and strips the stored metadata', () => {
+    const stored = { ...meta, branchId, code: 'MAIN', name: 'Main', address: null };
+    const merged = { ...stored, allowNegativeStock: false, isActive: true, name: 'Main store' };
+    expect(godownRecordSchema.parse(merged)).toEqual({
+      branchId,
+      code: 'MAIN',
+      name: 'Main store',
+      address: null,
+      allowNegativeStock: false,
+      isActive: true,
+    });
+    expect(pathsOf(godownRecordSchema.safeParse({ ...merged, code: '' }))).toEqual(['code']);
+  });
+
   it('parses a DB-shaped godown row', () => {
     const row = {
       ...meta,
@@ -400,8 +415,17 @@ describe('document series schemas', () => {
     ]);
   });
 
-  it('parses a DB-shaped series row', () => {
-    const row = { ...existing, nextNumber: '9223372036854775807' };
+  it('parses a DB-shaped series row, with or without issued numbers', () => {
+    const row = { ...existing, nextNumber: '9223372036854775807', lastIssuedNumber: null };
     expect(documentSeriesResponseSchema.parse(row)).toEqual(row);
+    const issued = { ...existing, nextNumber: '43', lastIssuedNumber: '42' };
+    expect(documentSeriesResponseSchema.parse(issued)).toEqual(issued);
+  });
+
+  it('groups document types into GSTR-1 numbering families', () => {
+    expect(docNumberFamily('sales_invoice')).toBe('invoice');
+    expect(docNumberFamily('credit_note')).toBe(docNumberFamily('debit_note'));
+    expect(docNumberFamily('delivery_challan')).toBe('delivery_challan');
+    expect(new Set(DOC_TYPES.map(docNumberFamily)).size).toBe(DOC_TYPES.length - 1);
   });
 });

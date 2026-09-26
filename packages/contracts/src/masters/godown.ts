@@ -13,6 +13,13 @@ const godownFields = {
   isActive: z.boolean(),
 };
 
+/**
+ * The whole godown. `PATCH /godowns/:id` parses `{ ...existing, ...patch }` with it; the branch
+ * rules need the branch, so the service checks them.
+ */
+export const godownRecordSchema = z.object(godownFields);
+export type GodownRecord = z.output<typeof godownRecordSchema>;
+
 export const godownResponseSchema = z.object({
   ...recordMetaShape,
   branchId: uuidSchema,

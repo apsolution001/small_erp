@@ -29,3 +29,19 @@ export const docTypeSchema = z.enum(DOC_TYPES);
 export type DocType = z.infer<typeof docTypeSchema>;
 /** Enum-style access: `DocType.sales_invoice`. */
 export const DocType = docTypeSchema.enum;
+
+/**
+ * Document types that share one number space per GSTIN and FY (spec 02 §2): GSTR-1 reports tax
+ * invoices together, and credit and debit notes together, and the e-invoice IRN is keyed on
+ * GSTIN + type + number + FY. Every other type is its own family.
+ */
+const SHARED_NUMBER_FAMILIES: Readonly<Partial<Record<DocType, string>>> = {
+  sales_invoice: 'invoice',
+  credit_note: 'note',
+  debit_note: 'note',
+};
+
+/** The numbering family of a document type (two series of one family must never collide). */
+export function docNumberFamily(docType: DocType): string {
+  return SHARED_NUMBER_FAMILIES[docType] ?? docType;
+}

@@ -1,0 +1,2 @@
+ALTER TABLE "document_series" ADD COLUMN "last_issued_number" bigint;--> statement-breakpoint
+ALTER TABLE "document_series" ADD CONSTRAINT "document_series_next_follows_last_issued" CHECK ("document_series"."last_issued_number" is null or ("document_series"."last_issued_number" >= 1 and "document_series"."next_number" = "document_series"."last_issued_number" + 1));

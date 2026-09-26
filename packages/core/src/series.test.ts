@@ -3,6 +3,7 @@ import {
   DOC_NUMBER_MAX_LENGTH,
   formatDocNumber,
   maxDocNumber,
+  seriesNumbersCollide,
   seriesWidth,
   validateSeries,
 } from './series.js';
@@ -126,6 +127,51 @@ describe('seriesWidth', () => {
     expect(seriesWidth({ ...SI, nextNumber: 123456n })).toBe(15);
     expect(seriesWidth({ ...SI, nextNumber: 99n })).toBe(13);
     expect(seriesWidth({ prefix: 'INV-', suffix: '/A', padding: 3, nextNumber: 5 })).toBe(9);
+  });
+});
+
+describe('seriesNumbersCollide', () => {
+  const s = (prefix: string, padding: number, suffix = '') => ({ prefix, suffix, padding });
+
+  it('finds numbers two differently written series both render', () => {
+    // SI/0001: n = 1 with padding 4, and n = 1 with prefix SI/0 and padding 3.
+    expect(seriesNumbersCollide(s('SI/', 4), s('SI/0', 3))).toBe(true);
+    // SI/10000: n = 10000 overflows padding 4 and fills padding 5.
+    expect(seriesNumbersCollide(s('SI/', 4), s('SI/', 5))).toBe(true);
+    // INV12: n = 12 after INV, and n = 2 after INV1.
+    expect(seriesNumbersCollide(s('INV', 2), s('INV1', 1))).toBe(true);
+    // X0019: n = 19 with padding 4, and n = 1 with padding 3 and the suffix 9.
+    expect(seriesNumbersCollide(s('X', 4), s('X', 3, '9'))).toBe(true);
+    // SI/0001..SI/0099: padding 4, and SI/00 with padding 2.
+    expect(seriesNumbersCollide(s('SI/', 4), s('SI/00', 2))).toBe(true);
+    // 91/X: n = 1 after the prefix 9, and n = 91 with no prefix.
+    expect(seriesNumbersCollide(s('9', 1, '/X'), s('', 2, '/X'))).toBe(true);
+    expect(seriesNumbersCollide(s('SI/26-27/', 4), s('SI/26-27/', 4))).toBe(true);
+  });
+
+  it('knows when two series can never meet', () => {
+    expect(seriesNumbersCollide(s('SI/', 4), s('SJ/', 4))).toBe(false);
+    expect(seriesNumbersCollide(s('SI/', 4), s('SI/', 1, '/B'))).toBe(false);
+    expect(seriesNumbersCollide(s('', 1), s('A', 1))).toBe(false);
+    // SI/0… needs a zero where SI/1… has a one.
+    expect(seriesNumbersCollide(s('SI/0', 3), s('SI/1', 3))).toBe(false);
+    // SI/0 with padding 1 renders SI/01..SI/09 then SI/010..; SI/ with padding 1 never pads.
+    expect(seriesNumbersCollide(s('SI/0', 1), s('SI/', 1))).toBe(false);
+    expect(seriesNumbersCollide(s('ABCDEFGHIJ', 1, 'ABCDEF'), s('ABCDEFGHIJ', 1, 'ABCDEG'))).toBe(
+      false,
+    );
+  });
+
+  it('is symmetric', () => {
+    const pairs: [ReturnType<typeof s>, ReturnType<typeof s>][] = [
+      [s('SI/', 4), s('SI/0', 3)],
+      [s('SI/0', 3), s('SI/1', 3)],
+      [s('X', 4), s('X', 3, '9')],
+      [s('SI/0', 1), s('SI/', 1)],
+    ];
+    for (const [a, b] of pairs) {
+      expect(seriesNumbersCollide(a, b)).toBe(seriesNumbersCollide(b, a));
+    }
   });
 });
 

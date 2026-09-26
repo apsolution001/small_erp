@@ -12,14 +12,23 @@ export interface TestAppOptions {
   readonly imports?: ModuleMetadata['imports'];
   /** Environment overrides (for example `DB_POOL_MAX: 1` to force connection reuse). */
   readonly env?: Partial<Env>;
+  /**
+   * Provider replacements, for ports whose real adapter belongs to a later module (for example
+   * `STOCK_POSTINGS` until the posting engine exists).
+   */
+  readonly providers?: readonly { readonly token: symbol; readonly useValue: unknown }[];
 }
 
 /** The real app (same module graph and HTTP pipeline as `main.ts`) on the test database. */
 export async function createTestApp(options: TestAppOptions = {}): Promise<NestExpressApplication> {
   const env: Env = { ...loadTestEnv(), ...options.env };
-  const moduleRef = await Test.createTestingModule({
+  let builder = Test.createTestingModule({
     imports: [AppModule.forRoot(env), ...(options.imports ?? [])],
-  }).compile();
+  });
+  for (const { token, useValue } of options.providers ?? []) {
+    builder = builder.overrideProvider(token).useValue(useValue);
+  }
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true });
   configureApp(app, env);
   await app.init();

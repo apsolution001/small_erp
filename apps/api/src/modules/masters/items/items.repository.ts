@@ -152,6 +152,20 @@ export class ItemsRepository {
     return row;
   }
 
+  /**
+   * When the books start earlier (allowed until the first posting), gives every item whose first
+   * rate starts after `date` a row from `date` with that same first slab, so no document date in
+   * the books is without a rate. History stays append-only: rows are added, never re-dated.
+   */
+  async extendFirstRatesTo(date: string): Promise<void> {
+    await this.db.execute(sql`
+      insert into ${itemTaxRates} (id, item_id, tax_rate_id, effective_from)
+      select app_uuidv7(), first.item_id, first.tax_rate_id, ${date}::date
+        from (select distinct on (item_id) item_id, tax_rate_id, effective_from
+                from ${itemTaxRates} order by item_id, effective_from) first
+       where first.effective_from > ${date}::date`);
+  }
+
   async insertTaxRate(values: NewItemTaxRateRow): Promise<ItemTaxRateRow> {
     const [row] = await this.db.insert(itemTaxRates).values(values).returning();
     if (row === undefined) throw new Error('Item tax rate insert returned no row');

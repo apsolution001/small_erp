@@ -115,6 +115,59 @@ export function maxDocNumber(series: SeriesFormat): bigint {
 }
 
 /**
+ * Whether the digit block `digits` is what a series with `padding` renders for some n ≥ 1:
+ * at least `padding` digits, not all zeros, and no leading zero once wider than the padding.
+ */
+function isRenderedDigits(digits: string, padding: number): boolean {
+  return (
+    digits.length >= padding &&
+    /[1-9]/.test(digits) &&
+    (digits.length === padding || !digits.startsWith('0'))
+  );
+}
+
+/** Each position of a number `length` characters wide: a fixed character, or null for a digit. */
+function layoutOf(series: SeriesFormat, length: number): (string | null)[] | undefined {
+  const digits = length - series.prefix.length - series.suffix.length;
+  if (digits < series.padding) return undefined;
+  return [...series.prefix, ...Array<null>(digits).fill(null), ...series.suffix];
+}
+
+function collideAtLength(a: SeriesFormat, b: SeriesFormat, length: number): boolean {
+  const la = layoutOf(a, length);
+  const lb = layoutOf(b, length);
+  if (la === undefined || lb === undefined) return false;
+  const chars: string[] = [];
+  for (let i = 0; i < length; i++) {
+    const ca = la[i] ?? null;
+    const cb = lb[i] ?? null;
+    if (ca !== null && cb !== null && ca !== cb) return false;
+    const fixed = ca ?? cb;
+    if (fixed !== null && (ca === null || cb === null) && !/\d/.test(fixed)) return false;
+    // A position that is a digit in both is free; 1 satisfies every digit-block rule at once.
+    chars.push(fixed ?? '1');
+  }
+  const digitsOfSeries = (s: SeriesFormat) =>
+    chars.slice(s.prefix.length, length - s.suffix.length).join('');
+  return (
+    isRenderedDigits(digitsOfSeries(a), a.padding) && isRenderedDigits(digitsOfSeries(b), b.padding)
+  );
+}
+
+/**
+ * Whether two series can ever render the same document number (spec 02: a number is unique per
+ * GSTIN, document family and FY). Exact for every n ≥ 1 within 16 characters, whatever the next
+ * numbers: `SI/` padding 4 and `SI/0` padding 3 both render `SI/0001`, while `SI/` and `SI/…/B`
+ * never meet. Series are compared as stored (upper-cased affixes).
+ */
+export function seriesNumbersCollide(a: SeriesFormat, b: SeriesFormat): boolean {
+  for (let length = 1; length <= DOC_NUMBER_MAX_LENGTH; length++) {
+    if (collideAtLength(a, b, length)) return true;
+  }
+  return false;
+}
+
+/**
  * Renders document number `n` of a series, e.g. `SI/26-27/0001`. Throws rather than ever
  * producing a number that breaks GST rule 46.
  */

@@ -88,6 +88,11 @@ export const documentSeriesResponseSchema = z.object({
   suffix: z.string(),
   padding: z.int(),
   nextNumber: z.string(),
+  /**
+   * The last number issued (a `bigint` as a string), or null while the series has issued nothing.
+   * Once it is set, the prefix, suffix, padding and next number are fixed.
+   */
+  lastIssuedNumber: z.string().nullable(),
   isDefault: z.boolean(),
 });
 export type DocumentSeriesResponse = z.infer<typeof documentSeriesResponseSchema>;
