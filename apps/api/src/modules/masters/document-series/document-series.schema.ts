@@ -59,9 +59,11 @@ export const documentSeries = tenantTable(
       'document_series_fy_format',
       sql`${t.fy} ~ '^[0-9]{4}-[0-9]{2}$' and right(${t.fy}, 2)::int = (left(${t.fy}, 4)::int + 1) % 100`,
     ),
+    // Upper-cased on input (contracts), so numbers are unique case-insensitively; a prefix starts
+    // with a letter or 1-9 (e-invoice: a document number never starts with 0 or a symbol).
     check(
       'document_series_affix_format',
-      sql`${t.prefix} ~ '^[A-Za-z0-9/-]{0,10}$' and ${t.suffix} ~ '^[A-Za-z0-9/-]{0,6}$'`,
+      sql`${t.prefix} ~ '^([A-Z1-9][A-Z0-9/-]{0,9})?$' and ${t.suffix} ~ '^[A-Z0-9/-]{0,6}$'`,
     ),
     check('document_series_padding_range', sql`${t.padding} between 1 and 8`),
     check('document_series_next_number_positive', sql`${t.nextNumber} >= 1`),

@@ -1,5 +1,5 @@
 import { type GstinLookupResponse, type GstinStatus } from '@ekaro/contracts';
-import { getState, gstinPan, gstinStateCode, isValidStateCode } from '@ekaro/core';
+import { getState, gstinPan, gstinStateCode, isCurrentStateCode } from '@ekaro/core';
 import { type GspProvider } from './gsp-provider.js';
 
 /** PANs starting with this return a cancelled registration, so tests can exercise rejection. */
@@ -25,8 +25,8 @@ function legalNameFor(pan: string): string {
 export class MockGspProvider implements GspProvider {
   lookupGstin(gstin: string): Promise<GstinLookupResponse> {
     const stateCode = gstinStateCode(gstin);
-    // gstinStateCode() already rejects unknown states; this narrows the type.
-    if (!isValidStateCode(stateCode)) throw new RangeError(`Unknown state in GSTIN "${gstin}"`);
+    // A valid GSTIN always carries a current state code (core rejects 25 and 28); this narrows it.
+    if (!isCurrentStateCode(stateCode)) throw new RangeError(`Invalid GSTIN "${gstin}"`);
     const pan = gstinPan(gstin);
     const digits = pan.slice(5, 9);
     const status: GstinStatus = pan.startsWith(MOCK_CANCELLED_PAN_PREFIX) ? 'Cancelled' : 'Active';

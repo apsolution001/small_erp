@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { gstinSchema, panSchema, stateCodeSchema } from '../common/primitives.js';
+import { currentStateCodeSchema, gstinSchema, panSchema } from '../common/primitives.js';
 import { indianAddressShape } from '../masters/shared.js';
 
 /** Registration status as the GST portal reports it. Only `Active` may sign up. */
@@ -8,7 +8,7 @@ export const gstinStatusSchema = z.enum(GSTIN_STATUSES);
 export type GstinStatus = z.infer<typeof gstinStatusSchema>;
 
 /** `GET /platform/gstin/:gstin` path parameters. */
-export const gstinLookupParamsSchema = z.object({ gstin: gstinSchema });
+export const gstinLookupParamsSchema = z.strictObject({ gstin: gstinSchema });
 export type GstinLookupParams = z.infer<typeof gstinLookupParamsSchema>;
 
 /**
@@ -20,7 +20,7 @@ export const gstinLookupResponseSchema = z.object({
   legalName: z.string(),
   tradeName: z.string().nullable(),
   pan: panSchema,
-  stateCode: stateCodeSchema,
+  stateCode: currentStateCodeSchema,
   status: gstinStatusSchema,
   address: z.object(indianAddressShape),
 });

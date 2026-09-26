@@ -26,9 +26,13 @@ export interface FieldError {
   readonly code: string;
 }
 
-/** 400: the input does not match the contract. Thrown by `ZodValidationPipe`. */
+/**
+ * 422: the body, query or params are well-formed JSON but do not match the contract (a wrong
+ * field, a broken rule, an unknown key on a strict schema). Thrown by `ZodValidationPipe`.
+ * Unparseable JSON is a 400 `BAD_REQUEST` from the framework instead.
+ */
 export class ValidationError extends DomainError {
-  readonly status = 400;
+  readonly status = 422;
 
   constructor(
     readonly errors: readonly FieldError[],

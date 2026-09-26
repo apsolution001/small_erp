@@ -100,17 +100,17 @@ describe('HTTP pipeline', () => {
       expect(res.body).toEqual({ received: { name: 'Bolt', qty: 3 } });
     });
 
-    it('renders validation failures as 400 with one entry per field', async () => {
+    it('renders validation failures as 422 with one entry per field', async () => {
       const res = await http(app)
         .post('/api/v1/pipeline-probe')
         .set('x-request-id', 'req-validation')
         .send({ name: '', qty: 1.5 })
-        .expect(400);
+        .expect(422);
       expect(res.headers['content-type']).toMatch(PROBLEM_JSON);
       expect(res.body).toEqual({
         type: 'about:blank',
-        title: 'Bad Request',
-        status: 400,
+        title: 'Unprocessable Entity',
+        status: 422,
         code: 'VALIDATION_FAILED',
         detail: 'The request is invalid.',
         errors: [
@@ -170,7 +170,7 @@ describe('HTTP pipeline', () => {
         http(app).get('/api/v1/nope'),
         http(app).get('/api/v1/pipeline-probe/crash'),
       ]);
-      expect(responses.map((r) => r.status)).toEqual([400, 400, 409, 404, 500]);
+      expect(responses.map((r) => r.status)).toEqual([422, 400, 409, 404, 500]);
       for (const res of responses) {
         expect(problemSchema.parse(res.body)).toEqual(res.body);
       }

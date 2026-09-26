@@ -31,6 +31,10 @@ describe('gstinLookupResponseSchema', () => {
     expect(gstinLookupResponseSchema.parse(lookup)).toEqual(lookup);
   });
 
+  it('rejects a legacy state code (GSTINs use current codes only)', () => {
+    expect(gstinLookupResponseSchema.safeParse({ ...lookup, stateCode: '28' }).success).toBe(false);
+  });
+
   it('rejects an unknown status', () => {
     expect(gstinLookupResponseSchema.safeParse({ ...lookup, status: 'Gone' }).success).toBe(false);
   });

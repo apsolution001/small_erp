@@ -86,15 +86,15 @@ describe('toProblemDetails', () => {
     ]);
     expect(toProblemDetails(error)).toEqual({
       type: 'about:blank',
-      title: 'Bad Request',
-      status: 400,
+      title: 'Unprocessable Entity',
+      status: 422,
       code: 'VALIDATION_FAILED',
       detail: 'The request is invalid.',
       errors: [{ path: 'email', message: 'Invalid email', code: 'invalid_format' }],
     });
   });
 
-  it('maps a ZodError to 400 with one entry per issue (dotted path, zod code)', () => {
+  it('maps a ZodError to 422 with one entry per issue (dotted path, zod code)', () => {
     const schema = z.object({
       name: z.string().min(1),
       lines: z.array(z.object({ qty: z.number().positive() })),
@@ -102,7 +102,7 @@ describe('toProblemDetails', () => {
     const result = schema.safeParse({ name: '', lines: [{ qty: -1 }] });
     expect(result.success).toBe(false);
     const problem = toProblemDetails(result.error);
-    expect(problem.status).toBe(400);
+    expect(problem.status).toBe(422);
     expect(problem.code).toBe('VALIDATION_FAILED');
     expect(problem.errors).toEqual([
       { path: 'name', message: expect.any(String) as string, code: 'too_small' },

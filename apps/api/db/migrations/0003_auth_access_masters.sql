@@ -192,7 +192,7 @@ CREATE TABLE "units" (
 	CONSTRAINT "units_tenant_code_unique" UNIQUE("tenant_id","code"),
 	CONSTRAINT "units_code_format" CHECK ("units"."code" ~ '^[A-Z0-9][A-Z0-9-]{0,9}$'),
 	CONSTRAINT "units_name_length" CHECK (char_length("units"."name") between 1 and 50),
-	CONSTRAINT "units_uqc_valid" CHECK ("units"."uqc" in ('BAG', 'BAL', 'BDL', 'BKL', 'BOU', 'BOX', 'BTL', 'BUN', 'CAN', 'CBM', 'CCM', 'CMS', 'CTN', 'DOZ', 'DRM', 'GGK', 'GMS', 'GRS', 'GYD', 'KGS', 'KLR', 'KME', 'LTR', 'MLT', 'MTR', 'MTS', 'NOS', 'OTH', 'PAC', 'PCS', 'PRS', 'QTL', 'ROL', 'SET', 'SQF', 'SQM', 'SQY', 'TBS', 'TGM', 'THD', 'TON', 'TUB', 'UGS', 'UNT', 'YDS')),
+	CONSTRAINT "units_uqc_valid" CHECK ("units"."uqc" in ('BAG', 'BAL', 'BDL', 'BKL', 'BOU', 'BOX', 'BTL', 'BUN', 'CAN', 'CBM', 'CCM', 'CMS', 'CTN', 'DOZ', 'DRM', 'GGK', 'GMS', 'GRS', 'GYD', 'KGS', 'KLR', 'KME', 'LTR', 'MLT', 'MTR', 'MTS', 'NA', 'NOS', 'OTH', 'PAC', 'PCS', 'PRS', 'QTL', 'ROL', 'SET', 'SQF', 'SQM', 'SQY', 'TBS', 'TGM', 'THD', 'TON', 'TUB', 'UGS', 'UNT', 'YDS')),
 	CONSTRAINT "units_decimal_places_range" CHECK ("units"."decimal_places" between 0 and 6)
 );
 --> statement-breakpoint
@@ -238,7 +238,7 @@ CREATE TABLE "document_series" (
 	CONSTRAINT "document_series_tenant_key_unique" UNIQUE("tenant_id","branch_id","doc_type","fy","prefix","suffix"),
 	CONSTRAINT "document_series_doc_type_valid" CHECK ("document_series"."doc_type" in ('purchase_requisition', 'purchase_order', 'grn', 'purchase_invoice', 'debit_note', 'quotation', 'sales_order', 'delivery_challan', 'sales_invoice', 'credit_note', 'stock_transfer', 'stock_adjustment', 'work_order', 'material_issue', 'production_entry', 'job_work_out', 'job_work_in', 'payment', 'receipt', 'contra', 'journal')),
 	CONSTRAINT "document_series_fy_format" CHECK ("document_series"."fy" ~ '^[0-9]{4}-[0-9]{2}$' and right("document_series"."fy", 2)::int = (left("document_series"."fy", 4)::int + 1) % 100),
-	CONSTRAINT "document_series_affix_format" CHECK ("document_series"."prefix" ~ '^[A-Za-z0-9/-]{0,10}$' and "document_series"."suffix" ~ '^[A-Za-z0-9/-]{0,6}$'),
+	CONSTRAINT "document_series_affix_format" CHECK ("document_series"."prefix" ~ '^([A-Z1-9][A-Z0-9/-]{0,9})?$' and "document_series"."suffix" ~ '^[A-Z0-9/-]{0,6}$'),
 	CONSTRAINT "document_series_padding_range" CHECK ("document_series"."padding" between 1 and 8),
 	CONSTRAINT "document_series_next_number_positive" CHECK ("document_series"."next_number" >= 1),
 	CONSTRAINT "document_series_number_length" CHECK (char_length("document_series"."prefix") + greatest("document_series"."padding", char_length("document_series"."next_number"::text)) + char_length("document_series"."suffix") <= 16)

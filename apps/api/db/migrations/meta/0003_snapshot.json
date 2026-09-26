@@ -1,5 +1,5 @@
 {
-  "id": "ba0367e0-034d-4525-b306-09e747039604",
+  "id": "a66bb5d9-271f-484e-b906-6739968da30f",
   "prevId": "1e8a8675-5d83-4c67-a640-6abcc9d82127",
   "version": "7",
   "dialect": "postgresql",
@@ -1644,7 +1644,7 @@
         },
         "units_uqc_valid": {
           "name": "units_uqc_valid",
-          "value": "\"units\".\"uqc\" in ('BAG', 'BAL', 'BDL', 'BKL', 'BOU', 'BOX', 'BTL', 'BUN', 'CAN', 'CBM', 'CCM', 'CMS', 'CTN', 'DOZ', 'DRM', 'GGK', 'GMS', 'GRS', 'GYD', 'KGS', 'KLR', 'KME', 'LTR', 'MLT', 'MTR', 'MTS', 'NOS', 'OTH', 'PAC', 'PCS', 'PRS', 'QTL', 'ROL', 'SET', 'SQF', 'SQM', 'SQY', 'TBS', 'TGM', 'THD', 'TON', 'TUB', 'UGS', 'UNT', 'YDS')"
+          "value": "\"units\".\"uqc\" in ('BAG', 'BAL', 'BDL', 'BKL', 'BOU', 'BOX', 'BTL', 'BUN', 'CAN', 'CBM', 'CCM', 'CMS', 'CTN', 'DOZ', 'DRM', 'GGK', 'GMS', 'GRS', 'GYD', 'KGS', 'KLR', 'KME', 'LTR', 'MLT', 'MTR', 'MTS', 'NA', 'NOS', 'OTH', 'PAC', 'PCS', 'PRS', 'QTL', 'ROL', 'SET', 'SQF', 'SQM', 'SQY', 'TBS', 'TGM', 'THD', 'TON', 'TUB', 'UGS', 'UNT', 'YDS')"
         },
         "units_decimal_places_range": {
           "name": "units_decimal_places_range",
@@ -2028,7 +2028,7 @@
         },
         "document_series_affix_format": {
           "name": "document_series_affix_format",
-          "value": "\"document_series\".\"prefix\" ~ '^[A-Za-z0-9/-]{0,10}$' and \"document_series\".\"suffix\" ~ '^[A-Za-z0-9/-]{0,6}$'"
+          "value": "\"document_series\".\"prefix\" ~ '^([A-Z1-9][A-Z0-9/-]{0,9})?$' and \"document_series\".\"suffix\" ~ '^[A-Z0-9/-]{0,6}$'"
         },
         "document_series_padding_range": {
           "name": "document_series_padding_range",
