@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 /**
  * Permission catalogue, `<module>.<resource>:<action>` (spec 01 §2, Sprint 1 slice).
+ * `masters.item_tax_rate` is a deliberate addition to spec 01 (GST rate changes, spec 02).
  * Later sprints append to it; never rename an entry, because roles store these strings.
  */
 export const PERMISSIONS = [
@@ -41,6 +42,9 @@ export const PERMISSIONS = [
   'masters.item:edit',
   'masters.item:delete',
   'masters.item:export',
+  // Effective-dated GST rates of an item: the only way a rate changes (slabs are immutable).
+  'masters.item_tax_rate:view',
+  'masters.item_tax_rate:create',
   'masters.party:view',
   'masters.party:create',
   'masters.party:edit',
@@ -99,7 +103,9 @@ export const DEFAULT_ROLES: readonly DefaultRole[] = Object.freeze([
   role('Accountant', 'Accounts, GST and masters; views all masters', true, [
     ...MASTER_VIEWS,
     'masters.company:edit',
+    'masters.tax_rate:create',
     'masters.tax_rate:edit',
+    'masters.item_tax_rate:create',
     'masters.party:edit',
     'masters.series:edit',
     'audit.log:view',

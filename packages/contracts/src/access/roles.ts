@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from '../common/pagination.js';
-import { recordMetaShape, text, versionSchema } from '../common/primitives.js';
+import { paginationQuerySchema, sortSchema } from '../common/pagination.js';
+import { recordMetaShape, text } from '../common/primitives.js';
+import { updateSchema } from '../common/update.js';
 import { permissionSchema } from './permissions.js';
 
 const uniquePermissions = z
@@ -25,7 +26,7 @@ export const roleResponseSchema = z.object({
 });
 export type RoleResponse = z.infer<typeof roleResponseSchema>;
 
-export const roleCreateSchema = z.object({
+export const roleCreateSchema = z.strictObject({
   ...roleFields,
   description: roleFields.description.default(null),
   permissions: uniquePermissions.default([]),
@@ -34,11 +35,13 @@ export const roleCreateSchema = z.object({
 export type RoleCreate = z.infer<typeof roleCreateSchema>;
 export type RoleCreateInput = z.input<typeof roleCreateSchema>;
 
-export const roleUpdateSchema = z.object(roleFields).partial().extend({ version: versionSchema });
+export const roleUpdateSchema = updateSchema(roleFields);
 export type RoleUpdate = z.infer<typeof roleUpdateSchema>;
 
-export const roleCloneSchema = z.object({ name: roleFields.name });
+export const roleCloneSchema = z.strictObject({ name: roleFields.name });
 export type RoleClone = z.infer<typeof roleCloneSchema>;
 
-export const roleListQuerySchema = paginationQuerySchema;
+export const roleListQuerySchema = paginationQuerySchema.extend({
+  sort: sortSchema(['name', 'createdAt']).optional(),
+});
 export type RoleListQuery = z.infer<typeof roleListQuerySchema>;

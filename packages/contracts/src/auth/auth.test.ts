@@ -1,5 +1,6 @@
 import { uuidv7 } from '@ekaro/core';
 import { describe, expect, it } from 'vitest';
+import { pathsOf, unrecognizedKeysOf } from '../testing/paths.js';
 import {
   acceptInvitationSchema,
   loginResponseSchema,
@@ -30,8 +31,19 @@ describe('signupSchema', () => {
   });
 
   it('requires accepting the terms and a valid GSTIN', () => {
-    expect(signupSchema.safeParse({ ...signup, acceptTerms: false }).success).toBe(false);
-    expect(signupSchema.safeParse({ ...signup, gstin: '27AAPFU0939F1ZA' }).success).toBe(false);
+    expect(pathsOf(signupSchema.safeParse({ ...signup, acceptTerms: false }))).toEqual([
+      'acceptTerms',
+    ]);
+    expect(pathsOf(signupSchema.safeParse({ ...signup, gstin: '27AAPFU0939F1ZA' }))).toEqual([
+      'gstin',
+    ]);
+  });
+
+  it('rejects a GSTIN with a legacy state code', () => {
+    // 28 (old Andhra Pradesh) with a valid checksum.
+    expect(pathsOf(signupSchema.safeParse({ ...signup, gstin: '28AAPFU0939F1ZT' }))).toEqual([
+      'gstin',
+    ]);
   });
 });
 
@@ -54,7 +66,7 @@ describe('login and tenant selection', () => {
       email: 'a@b.in',
       password: 'short',
     });
-    expect(loginSchema.safeParse({ email: 'a@b.in', password: '' }).success).toBe(false);
+    expect(pathsOf(loginSchema.safeParse({ email: 'a@b.in', password: '' }))).toEqual(['password']);
   });
 
   it('parses both login outcomes', () => {
@@ -94,7 +106,7 @@ describe('login and tenant selection', () => {
       selectionToken: 't',
       tenantId,
     });
-    expect(switchTenantSchema.safeParse({ tenantId: 'x' }).success).toBe(false);
+    expect(pathsOf(switchTenantSchema.safeParse({ tenantId: 'x' }))).toEqual(['tenantId']);
   });
 });
 
@@ -111,11 +123,24 @@ describe('acceptInvitationSchema', () => {
         password: '1234567890',
       }).success,
     ).toBe(true);
-    expect(acceptInvitationSchema.safeParse({ token: 'tok', fullName: 'New User' }).success).toBe(
-      false,
-    );
-    expect(acceptInvitationSchema.safeParse({ token: 'tok', password: '1234567890' }).success).toBe(
-      false,
-    );
+    expect(
+      pathsOf(acceptInvitationSchema.safeParse({ token: 'tok', fullName: 'New User' })),
+    ).toEqual(['password']);
+    expect(
+      pathsOf(acceptInvitationSchema.safeParse({ token: 'tok', password: '1234567890' })),
+    ).toEqual(['password']);
+  });
+});
+
+describe('request bodies are strict', () => {
+  const tenantId = uuidv7();
+  it.each([
+    ['signup', signupSchema, { ...signup, plan: 'pro' }, 'plan'],
+    ['login', loginSchema, { email: 'a@b.in', password: 'x', remember: true }, 'remember'],
+    ['select-tenant', selectTenantSchema, { selectionToken: 't', tenantId, role: 'x' }, 'role'],
+    ['switch-tenant', switchTenantSchema, { tenantId, userId: tenantId }, 'userId'],
+    ['accept-invitation', acceptInvitationSchema, { token: 't', email: 'a@b.in' }, 'email'],
+  ] as const)('%s rejects an unknown key', (_name, schema, body, key) => {
+    expect(unrecognizedKeysOf(schema.safeParse(body))).toEqual([key]);
   });
 });

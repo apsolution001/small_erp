@@ -1,15 +1,16 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from '../common/pagination.js';
+import { paginationQuerySchema, sortSchema } from '../common/pagination.js';
 import {
   isoDateSchema,
   nonNegativeQtySchema,
   positiveQtySchema,
+  qtySchema,
   rateSchema,
   recordMetaShape,
   text,
   uuidSchema,
-  versionSchema,
 } from '../common/primitives.js';
+import { updateSchema } from '../common/update.js';
 import { activeFilterSchema } from './shared.js';
 
 export const ITEM_TYPES = ['goods', 'service'] as const;
@@ -29,7 +30,7 @@ export const itemKindSchema = z.enum(ITEM_KINDS);
 export type ItemKind = z.infer<typeof itemKindSchema>;
 
 /** A UoM conversion. The base unit has an implicit factor of 1 and is never listed. */
-export const itemUnitSchema = z.object({
+export const itemUnitSchema = z.strictObject({
   unitId: uuidSchema,
   /** How many base units one of this unit holds, e.g. BAG = 50 when the base is KGS. */
   factorToBase: positiveQtySchema,
@@ -59,11 +60,11 @@ const itemFields = {
   units: z.array(itemUnitSchema),
 };
 
-/** Every field optional: the rules run on creates and on partial updates alike. */
-const itemPatchSchema = z.object(itemFields).partial();
-type ItemRuleInput = z.output<typeof itemPatchSchema>;
+const itemRecordObject = z.object(itemFields);
+type ItemRuleInput = z.output<typeof itemRecordObject>;
 
-function checkHsnSac(itemType: ItemType, hsnSac: string, ctx: z.RefinementCtx): void {
+function checkHsnSac(value: ItemRuleInput, ctx: z.RefinementCtx): void {
+  const { itemType, hsnSac } = value;
   const valid =
     itemType === 'goods'
       ? [4, 6, 8].includes(hsnSac.length)
@@ -82,7 +83,6 @@ function checkHsnSac(itemType: ItemType, hsnSac: string, ctx: z.RefinementCtx): 
 
 function checkUnits(value: ItemRuleInput, ctx: z.RefinementCtx): void {
   const { units, baseUnitId } = value;
-  if (units === undefined) return;
   const seen = new Set<string>();
   units.forEach((unit, index) => {
     if (unit.unitId === baseUnitId || seen.has(unit.unitId)) {
@@ -97,10 +97,9 @@ function checkUnits(value: ItemRuleInput, ctx: z.RefinementCtx): void {
     }
     seen.add(unit.unitId);
   });
-  if (baseUnitId === undefined) return;
   for (const field of ['purchaseUnitId', 'salesUnitId'] as const) {
     const unitId = value[field];
-    if (unitId && unitId !== baseUnitId && !seen.has(unitId)) {
+    if (unitId !== null && unitId !== baseUnitId && !seen.has(unitId)) {
       ctx.addIssue({
         code: 'custom',
         path: [field],
@@ -111,39 +110,35 @@ function checkUnits(value: ItemRuleInput, ctx: z.RefinementCtx): void {
 }
 
 /**
- * Item rules (spec 02). Each runs only when its fields are present, so a PATCH is checked as far
- * as it can be and the service re-checks the merged record.
+ * Item rules (spec 02): expiry tracking needs batch tracking; kind `service` ⇔ type `service`;
+ * services have no batches; HSN/SAC shape; UoM conversions and purchase/sales units.
  */
 const itemRules = (value: ItemRuleInput, ctx: z.RefinementCtx): void => {
-  const { itemType, itemKind, hsnSac, trackBatches, trackExpiry } = value;
-  if (trackExpiry === true && trackBatches === false) {
+  const { itemType, itemKind, trackBatches, trackExpiry } = value;
+  if (trackExpiry && !trackBatches) {
     ctx.addIssue({
       code: 'custom',
       path: ['trackExpiry'],
       message: 'Expiry tracking needs batch tracking',
     });
   }
-  if (
-    itemType !== undefined &&
-    itemKind !== undefined &&
-    (itemType === 'service') !== (itemKind === 'service')
-  ) {
+  if ((itemType === 'service') !== (itemKind === 'service')) {
     ctx.addIssue({
       code: 'custom',
       path: ['itemKind'],
       message: 'Use kind "service" for services, and only for services',
     });
   }
-  if (itemType === 'service' && trackBatches === true) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['trackBatches'],
-      message: 'Services have no batches',
-    });
+  if (itemType === 'service' && trackBatches) {
+    ctx.addIssue({ code: 'custom', path: ['trackBatches'], message: 'Services have no batches' });
   }
-  if (itemType !== undefined && hsnSac !== undefined) checkHsnSac(itemType, hsnSac, ctx);
+  checkHsnSac(value, ctx);
   checkUnits(value, ctx);
 };
+
+/** The whole item with its rules. The service parses `{ ...existing, ...patch }` with it. */
+export const itemRecordSchema = itemRecordObject.superRefine(itemRules);
+export type ItemRecord = z.output<typeof itemRecordSchema>;
 
 /** An effective-dated GST rate of an item: the latest row with `effectiveFrom ≤ date` applies. */
 export const itemTaxRateResponseSchema = z.object({
@@ -153,8 +148,11 @@ export const itemTaxRateResponseSchema = z.object({
 });
 export type ItemTaxRateResponse = z.infer<typeof itemTaxRateResponseSchema>;
 
-/** `POST /items/:id/tax-rates`. */
-export const itemTaxRateCreateSchema = z.object({
+/**
+ * `POST /items/:id/tax-rates` (`masters.item_tax_rate:create`). This is how a GST rate changes:
+ * tax-rate slabs are immutable in their rates.
+ */
+export const itemTaxRateCreateSchema = z.strictObject({
   taxRateId: uuidSchema,
   effectiveFrom: isoDateSchema,
 });
@@ -162,7 +160,25 @@ export type ItemTaxRateCreate = z.infer<typeof itemTaxRateCreateSchema>;
 
 export const itemResponseSchema = z.object({
   ...recordMetaShape,
-  ...itemFields,
+  code: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  itemType: itemTypeSchema,
+  itemKind: itemKindSchema,
+  categoryId: uuidSchema.nullable(),
+  hsnSac: z.string(),
+  baseUnitId: uuidSchema,
+  purchaseUnitId: uuidSchema.nullable(),
+  salesUnitId: uuidSchema.nullable(),
+  reorderLevel: qtySchema.nullable(),
+  reorderQty: qtySchema.nullable(),
+  minOrderQty: qtySchema.nullable(),
+  trackBatches: z.boolean(),
+  trackExpiry: z.boolean(),
+  standardPurchaseRate: rateSchema.nullable(),
+  standardSalesRate: rateSchema.nullable(),
+  isActive: z.boolean(),
+  units: z.array(z.object({ unitId: uuidSchema, factorToBase: qtySchema })),
   taxRates: z.array(itemTaxRateResponseSchema),
 });
 export type ItemResponse = z.infer<typeof itemResponseSchema>;
@@ -172,7 +188,7 @@ export type ItemResponse = z.infer<typeof itemResponseSchema>;
  * `effectiveFrom` = the company's books-begin date.
  */
 export const itemCreateSchema = z
-  .object({
+  .strictObject({
     ...itemFields,
     description: itemFields.description.default(null),
     categoryId: itemFields.categoryId.default(null),
@@ -194,12 +210,11 @@ export type ItemCreate = z.infer<typeof itemCreateSchema>;
 export type ItemCreateInput = z.input<typeof itemCreateSchema>;
 
 /** `PATCH /items/:id`. Sending `units` replaces the whole conversion list. */
-export const itemUpdateSchema = itemPatchSchema
-  .extend({ version: versionSchema })
-  .superRefine(itemRules);
+export const itemUpdateSchema = updateSchema(itemFields);
 export type ItemUpdate = z.infer<typeof itemUpdateSchema>;
 
 export const itemListQuerySchema = paginationQuerySchema.extend({
+  sort: sortSchema(['code', 'name', 'hsnSac', 'createdAt']).optional(),
   kind: itemKindSchema.optional(),
   type: itemTypeSchema.optional(),
   categoryId: uuidSchema.optional(),
