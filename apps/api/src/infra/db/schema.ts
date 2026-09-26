@@ -13,3 +13,7 @@ export * from '../../modules/masters/godowns/godowns.schema.js';
 export * from '../../modules/masters/units/units.schema.js';
 export * from '../../modules/masters/tax-rates/tax-rates.schema.js';
 export * from '../../modules/masters/document-series/document-series.schema.js';
+export * from '../../modules/masters/item-categories/item-categories.schema.js';
+export * from '../../modules/masters/items/items.schema.js';
+export * from '../../modules/masters/items/item-units.schema.js';
+export * from '../../modules/masters/items/item-tax-rates.schema.js';

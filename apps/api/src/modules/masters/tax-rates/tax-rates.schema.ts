@@ -6,6 +6,8 @@ import { tenantTable } from '../../../infra/db/columns.js';
 /**
  * GST slab definitions (spec 02 §2). `gst_rate` is the total rate: CGST = SGST = rate / 2 and
  * IGST = rate are derived, never stored. Percentages are `numeric(7,4)` (database standard).
+ * The rate columns and the three flags are immutable once inserted (a trigger enforces it; a rate
+ * change is a new slab plus an effective-dated `item_tax_rates` row).
  */
 export const taxRates = tenantTable(
   'tax_rates',
@@ -27,6 +29,8 @@ export const taxRates = tenantTable(
       t.isNilRated,
       t.isNonGst,
     ),
+    // Target of the composite foreign key from item_tax_rates.
+    unique('tax_rates_tenant_id_unique').on(t.tenantId, t.id),
     check('tax_rates_name_length', lengthBetween(t.name, 1, 50)),
     check('tax_rates_gst_rate_range', sql`${t.gstRate} between 0 and 100`),
     check('tax_rates_cess_rate_non_negative', sql`${t.cessRate} >= 0`),

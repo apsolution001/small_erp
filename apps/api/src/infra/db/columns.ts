@@ -1,6 +1,7 @@
 import { type BuildColumns, type BuildExtraConfigColumns, sql } from 'drizzle-orm';
 import {
   integer,
+  numeric,
   type PgColumnBuilderBase,
   type PgTableExtraConfigValue,
   type PgTableWithColumns,
@@ -11,6 +12,12 @@ import { tenants } from '../../modules/platform/tenants/tenants.schema.js';
 import { primaryId, timestamptz, updatedAt } from './base-columns.js';
 
 export { primaryId, timestamps, timestamptz } from './base-columns.js';
+
+/**
+ * `numeric(20,6)`: quantities and unit rates (database standard, ADR 0005). Drizzle reads and
+ * writes it as a string, so decimal values never pass through a JS number.
+ */
+export const qtyColumn = () => numeric({ precision: 20, scale: 6 });
 
 /**
  * `tenant_id uuid not null default app_current_tenant() references tenants(id)`. For tenant tables

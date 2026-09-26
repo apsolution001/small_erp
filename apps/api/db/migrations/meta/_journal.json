@@ -36,6 +36,20 @@
       "when": 1790402767680,
       "tag": "0004_auth_access_masters_security",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790404457341,
+      "tag": "0005_t107_masters_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790404486090,
+      "tag": "0006_t107_masters_catalog_security",
+      "breakpoints": true
     }
   ]
 }

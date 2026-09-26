@@ -16,6 +16,8 @@ export const units = tenantTable(
   },
   (t) => [
     unique('units_tenant_code_unique').on(t.tenantId, t.code),
+    // Target of composite foreign keys (items, item_units): references stay within the tenant.
+    unique('units_tenant_id_unique').on(t.tenantId, t.id),
     check('units_code_format', sql`${t.code} ~ '^[A-Z0-9][A-Z0-9-]{0,9}$'`),
     check('units_name_length', lengthBetween(t.name, 1, 50)),
     check('units_uqc_valid', inList(t.uqc, UQC_CODES)),
