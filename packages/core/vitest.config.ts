@@ -8,6 +8,8 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/index.ts'],
+      // Gate from docs/standards/testing.md: packages/core ≥ 95% (target 100%).
+      thresholds: { lines: 95, statements: 95, functions: 95, branches: 95 },
     },
   },
 });
