@@ -12,3 +12,6 @@ test-results
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Local Redis snapshot
+dump.rdb
