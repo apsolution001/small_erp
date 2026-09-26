@@ -23,6 +23,13 @@ describe('ErrorCode', () => {
       'INVALID_TRANSITION',
       'PERIOD_LOCKED',
       'CREDIT_LIMIT_EXCEEDED',
+      // raised by the framework (malformed body, unknown method, throttling, dependency down)
+      'BAD_REQUEST',
+      'METHOD_NOT_ALLOWED',
+      'PAYLOAD_TOO_LARGE',
+      'UNSUPPORTED_MEDIA_TYPE',
+      'RATE_LIMITED',
+      'SERVICE_UNAVAILABLE',
     ]) {
       expect(ERROR_CODES, code).toContain(code);
     }

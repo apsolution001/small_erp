@@ -146,6 +146,22 @@ export function defaultRole(name: string): DefaultRole {
   return found;
 }
 
+const CATALOGUE: ReadonlySet<string> = new Set(PERMISSIONS);
+
+/**
+ * A role's effective permissions, in catalogue order. The owner always holds the whole catalogue
+ * (computed, so permissions added later are included). Stored strings that are no longer in the
+ * catalogue are ignored.
+ */
+export function effectivePermissions(role: {
+  readonly isOwner: boolean;
+  readonly permissions: readonly string[];
+}): Permission[] {
+  if (role.isOwner) return [...PERMISSIONS];
+  const stored = new Set(role.permissions.filter((p) => CATALOGUE.has(p)));
+  return PERMISSIONS.filter((p) => stored.has(p));
+}
+
 /** True when `granted` (a role's effective permissions) includes `required`. */
 export function hasPermission(
   granted: ReadonlySet<Permission> | readonly Permission[],

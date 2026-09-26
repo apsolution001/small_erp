@@ -7,6 +7,7 @@ import { z } from 'zod';
 export const ERROR_CODES = [
   // generic
   'VALIDATION_FAILED',
+  'BAD_REQUEST',
   'NOT_FOUND',
   'CONFLICT',
   'VERSION_CONFLICT',
@@ -14,8 +15,12 @@ export const ERROR_CODES = [
   'IN_USE',
   'BUSINESS_RULE_VIOLATION',
   'IDEMPOTENCY_KEY_REQUIRED',
+  'METHOD_NOT_ALLOWED',
+  'PAYLOAD_TOO_LARGE',
+  'UNSUPPORTED_MEDIA_TYPE',
   'RATE_LIMITED',
   'INTERNAL_ERROR',
+  'SERVICE_UNAVAILABLE',
   // authentication and sessions
   'UNAUTHENTICATED',
   'INVALID_CREDENTIALS',

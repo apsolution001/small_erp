@@ -28,6 +28,7 @@ describe('package root', () => {
       'itemCreateSchema',
       'partyCreateSchema',
       'documentSeriesCreateSchema',
+      'gstinLookupResponseSchema',
     ]) {
       expect(names, name).toContain(name);
     }

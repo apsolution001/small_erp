@@ -4,6 +4,7 @@ import {
   OWNER_ROLE_NAME,
   PERMISSIONS,
   defaultRole,
+  effectivePermissions,
   hasPermission,
   permissionSchema,
   type Permission,
@@ -158,5 +159,28 @@ describe('hasPermission', () => {
     expect(hasPermission(granted, 'masters.item:edit')).toBe(false);
     expect(hasPermission(new Set(granted), 'masters.item:view')).toBe(true);
     expect(hasPermission(new Set<Permission>(), 'masters.item:view')).toBe(false);
+  });
+});
+
+describe('effectivePermissions', () => {
+  it('gives the owner the whole catalogue, whatever is stored', () => {
+    expect(effectivePermissions({ isOwner: true, permissions: [] })).toEqual([...PERMISSIONS]);
+  });
+
+  it('keeps stored catalogue permissions in catalogue order and drops unknown strings', () => {
+    expect(
+      effectivePermissions({
+        isOwner: false,
+        permissions: ['masters.party:view', 'retired.thing:view', 'masters.item:view'],
+      }),
+    ).toEqual(['masters.item:view', 'masters.party:view']);
+  });
+
+  it('matches every default role', () => {
+    for (const role of DEFAULT_ROLES) {
+      const stored = role.allPermissions ? [] : role.permissions;
+      const effective = effectivePermissions({ isOwner: role.allPermissions, permissions: stored });
+      expect(sorted(effective), role.name).toEqual(sorted(role.permissions));
+    }
   });
 });
