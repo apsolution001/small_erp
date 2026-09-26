@@ -28,26 +28,26 @@ flowchart LR
 
 ## Module map (`apps/api/src/modules`)
 
-| Module | Owns | Sprint |
-| --- | --- | --- |
-| `platform` | tenants, signup, plans, feature flags, support consent | 1 |
-| `auth` | users, credentials, sessions / refresh tokens, 2FA, Google sign-in | 1 |
-| `access` | roles, permissions, memberships, branch scope, invitations | 1 |
-| `audit` | audit_log query API (writes come from the DB trigger) | 1 |
-| `masters` | company profile and settings, branches, godowns, units + conversions, tax rates, item categories, items, parties (+ addresses), document series | 1 |
-| `approvals` | approval rules (PL-03), approval requests, decisions | 2 |
-| `posting` | stock ledger, valuation layers, GL entries, period locks | 2 |
-| `inventory` | transfers, adjustments, batches, stock count, reorder | 2 |
-| `purchase` | PR, PO, GRN, purchase invoice (3-way match), returns / debit notes | 2 |
-| `sales` | quotation, SO, delivery challan, invoice, returns / credit notes, credit-limit check | 3 |
-| `accounts` | chart of accounts, vouchers, bill-wise settlement, bank reco, FY close | 3 |
-| `documents` | PDF rendering, attachments, email sending | 3 |
-| `production` | BOM, work orders, material issue, output / scrap, job work (ITC-04) | 4 |
-| `gst` | GSP port, e-invoice, e-way bill, GSTR-1 / 3B data, 2B reconciliation | 4–5 |
-| `imports` | Excel templates / import, Tally masters import, full export | 5 |
-| `tally-sync` | voucher push to the Tally connector | 5 |
-| `reports` | dashboard, stock / sales / purchase reports, P&L, BS, TB, day book | 5 |
-| `notifications` | email notifications (approvals, low stock, overdue) | 5 |
+| Module          | Owns                                                                                                                                            | Sprint |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `platform`      | tenants, signup, plans, feature flags, support consent                                                                                          | 1      |
+| `auth`          | users, credentials, sessions / refresh tokens, 2FA, Google sign-in                                                                              | 1      |
+| `access`        | roles, permissions, memberships, branch scope, invitations                                                                                      | 1      |
+| `audit`         | audit_log query API (writes come from the DB trigger)                                                                                           | 1      |
+| `masters`       | company profile and settings, branches, godowns, units + conversions, tax rates, item categories, items, parties (+ addresses), document series | 1      |
+| `approvals`     | approval rules (PL-03), approval requests, decisions                                                                                            | 2      |
+| `posting`       | stock ledger, valuation layers, GL entries, period locks                                                                                        | 2      |
+| `inventory`     | transfers, adjustments, batches, stock count, reorder                                                                                           | 2      |
+| `purchase`      | PR, PO, GRN, purchase invoice (3-way match), returns / debit notes                                                                              | 2      |
+| `sales`         | quotation, SO, delivery challan, invoice, returns / credit notes, credit-limit check                                                            | 3      |
+| `accounts`      | chart of accounts, vouchers, bill-wise settlement, bank reco, FY close                                                                          | 3      |
+| `documents`     | PDF rendering, attachments, email sending                                                                                                       | 3      |
+| `production`    | BOM, work orders, material issue, output / scrap, job work (ITC-04)                                                                             | 4      |
+| `gst`           | GSP port, e-invoice, e-way bill, GSTR-1 / 3B data, 2B reconciliation                                                                            | 4–5    |
+| `imports`       | Excel templates / import, Tally masters import, full export                                                                                     | 5      |
+| `tally-sync`    | voucher push to the Tally connector                                                                                                             | 5      |
+| `reports`       | dashboard, stock / sales / purchase reports, P&L, BS, TB, day book                                                                              | 5      |
+| `notifications` | email notifications (approvals, low stock, overdue)                                                                                             | 5      |
 
 ## Web map (`apps/web/src`)
 

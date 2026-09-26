@@ -1,19 +1,19 @@
 # Ekaro — cloud ERP for Indian MSMEs
 
-*Ek system. Poora business.* A multi-tenant SaaS ERP that covers inventory, purchase, sales, production and GST accounting.
+_Ek system. Poora business._ A multi-tenant SaaS ERP that covers inventory, purchase, sales, production and GST accounting.
 The product source of truth is [`docs/brd.md`](docs/brd.md). When the BRD and anything else disagree, the BRD wins. After it come the ADRs, then the specs.
 
 ## Read before you code
 
-| When you… | Read |
-| --- | --- |
-| start any task | the task file in `docs/tasks/`, the spec it links, and `docs/architecture/overview.md` |
-| touch `apps/api` | `docs/standards/backend.md`, `docs/standards/database.md` |
-| touch `apps/web` | `docs/standards/frontend.md` |
-| touch money, stock, GST or ledgers | `docs/standards/accounting.md` (mandatory) |
-| write tests | `docs/standards/testing.md` |
-| commit or open a PR | `docs/standards/git.md` |
-| make a design decision not covered | `docs/adr/` — then add a new ADR; never decide silently |
+| When you…                          | Read                                                                                   |
+| ---------------------------------- | -------------------------------------------------------------------------------------- |
+| start any task                     | the task file in `docs/tasks/`, the spec it links, and `docs/architecture/overview.md` |
+| touch `apps/api`                   | `docs/standards/backend.md`, `docs/standards/database.md`                              |
+| touch `apps/web`                   | `docs/standards/frontend.md`                                                           |
+| touch money, stock, GST or ledgers | `docs/standards/accounting.md` (mandatory)                                             |
+| write tests                        | `docs/standards/testing.md`                                                            |
+| commit or open a PR                | `docs/standards/git.md`                                                                |
+| make a design decision not covered | `docs/adr/` — then add a new ADR; never decide silently                                |
 
 ## Stack (decided, see `docs/adr/`)
 
@@ -51,7 +51,7 @@ pnpm --filter @ekaro/api test:e2e          # API integration tests (needs postgr
 2. Re-read its acceptance criteria. If something is ambiguous, decide it using the BRD plus industry practice, and record the decision in the task file (and in an ADR if it is architectural).
 3. Write the failing tests first (red → green → refactor).
 4. Implement in small commits using Conventional Commits.
-5. Run `pnpm lint && pnpm typecheck && pnpm test` (and `test:e2e` when you touched the API). Paste the evidence into the task file's *Verification* section. Never claim done without it.
+5. Run `pnpm lint && pnpm typecheck && pnpm test` (and `test:e2e` when you touched the API). Paste the evidence into the task file's _Verification_ section. Never claim done without it.
 6. Have the `code-reviewer` agent review the change (and `accounting-reviewer` when money, stock or GST changed). Fix every blocking finding.
 7. Set the task to `done`.
 

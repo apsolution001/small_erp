@@ -60,4 +60,4 @@
 - Enable TypeScript `strict`, `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. `any`, non-null `!` on external data and `@ts-ignore` are not allowed.
 - Names: files kebab-case, classes PascalCase, DB columns snake_case, TS properties camelCase (Drizzle maps them).
 - Functions stay small and do one thing. Prefer pure functions. Services receive dependencies by constructor injection only.
-- Comments explain *why*, not *what*. A public service method gets a one-line TSDoc when its behaviour is not obvious.
+- Comments explain _why_, not _what_. A public service method gets a one-line TSDoc when its behaviour is not obvious.

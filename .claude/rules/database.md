@@ -1,9 +1,10 @@
 ---
 paths:
-  - "apps/api/db/**"
-  - "apps/api/src/**/*.schema.ts"
-  - "apps/api/src/infra/db/**"
+  - 'apps/api/db/**'
+  - 'apps/api/src/**/*.schema.ts'
+  - 'apps/api/src/infra/db/**'
 ---
+
 # Database rules (full text: docs/standards/database.md)
 
 - UUIDv7 primary keys. `bigint` paise for money. `numeric(20,6)` for quantities and rates. `text` + check constraints for enums.

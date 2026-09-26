@@ -25,12 +25,7 @@
       "Bash(git commit:*)",
       "Bash(psql:*)"
     ],
-    "deny": [
-      "Read(./.env)",
-      "Read(./**/.env)",
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)"
-    ]
+    "deny": ["Read(./.env)", "Read(./**/.env)", "Bash(git push --force:*)", "Bash(git push -f:*)"]
   },
   "hooks": {
     "SessionStart": [

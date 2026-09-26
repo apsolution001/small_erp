@@ -2,11 +2,11 @@
 
 ## Roles
 
-| Role | Used by | Rights |
-| --- | --- | --- |
-| `ekaro_owner` | migrations only | owns all objects |
-| `ekaro_app` | API + workers (tenant work) | DML on tenant tables; **RLS enforced**; no DDL, no `BYPASSRLS` |
-| `ekaro_platform` | `modules/platform`, `modules/auth` only (lint-enforced) | DML on platform tables (`tenants`, `users`, `refresh_tokens`, ...). Has `BYPASSRLS` because login, tenant switching and signup bootstrap run before a tenant context exists. Every use is audited in code review |
+| Role             | Used by                                                 | Rights                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ekaro_owner`    | migrations only                                         | owns all objects                                                                                                                                                                                                                                                                                                                                                                  |
+| `ekaro_app`      | API + workers (tenant work)                             | DML on tenant tables; **RLS enforced**; no DDL, no `BYPASSRLS`                                                                                                                                                                                                                                                                                                                    |
+| `ekaro_platform` | `modules/platform`, `modules/auth` only (lint-enforced) | DML on platform tables (`tenants`, `users`, `refresh_tokens`). **No `BYPASSRLS`.** Cross-tenant reads that login needs (`memberships`, `roles`, `company_profile`) go through an explicit per-role policy `platform_read ... to ekaro_platform using (true)`. Signup bootstrap sets `app.tenant_id` to the new tenant inside its transaction, so the normal tenant policy applies |
 
 ## Table rules
 
@@ -24,16 +24,16 @@
 
 ## Types
 
-| Data | Type |
-| --- | --- |
-| money amounts (line totals, taxes, ledger amounts, balances, credit limits) | `bigint` paise |
-| unit rates / prices | `numeric(20,6)` rupees per unit (see accounting standard for rounding) |
-| quantities | `numeric(20,6)` |
-| percentages (GST rate, scrap %) | `numeric(7,4)` |
-| document dates | `date`; event times `timestamptz` |
-| enums | Postgres `text` + `check` constraint (easier to migrate than `enum` types), mirrored by a Zod enum in contracts |
-| GSTIN | `char(15)` validated by checksum in app + regex check constraint |
-| codes / names | `text` with length check constraints |
+| Data                                                                        | Type                                                                                                            |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| money amounts (line totals, taxes, ledger amounts, balances, credit limits) | `bigint` paise                                                                                                  |
+| unit rates / prices                                                         | `numeric(20,6)` rupees per unit (see accounting standard for rounding)                                          |
+| quantities                                                                  | `numeric(20,6)`                                                                                                 |
+| percentages (GST rate, scrap %)                                             | `numeric(7,4)`                                                                                                  |
+| document dates                                                              | `date`; event times `timestamptz`                                                                               |
+| enums                                                                       | Postgres `text` + `check` constraint (easier to migrate than `enum` types), mirrored by a Zod enum in contracts |
+| GSTIN                                                                       | `char(15)` validated by checksum in app + regex check constraint                                                |
+| codes / names                                                               | `text` with length check constraints                                                                            |
 
 ## Migrations
 

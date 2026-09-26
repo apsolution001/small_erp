@@ -7,28 +7,30 @@ BRD refs: MS-01, §8 (roles), §10 (security), PL-04. ADRs: 0003, 0006, 0007, 00
 ### Platform tables (no tenant RLS; accessed via `ekaro_platform`)
 
 **tenants**
-| column | type | notes |
-| --- | --- | --- |
-| id | uuid pk | uuidv7 |
-| slug | text unique | url-safe, derived from trade name, used in UI only |
-| status | text | `trial \| active \| suspended \| closed` |
-| plan | text | `starter \| growth \| pro` (trial = growth features, BRD §12) |
-| trial_ends_at | timestamptz | signup + 14 days |
-| created_at, updated_at | timestamptz | |
+
+| column                 | type        | notes                                                         |
+| ---------------------- | ----------- | ------------------------------------------------------------- |
+| id                     | uuid pk     | uuidv7                                                        |
+| slug                   | text unique | url-safe, derived from trade name, used in UI only            |
+| status                 | text        | `trial \| active \| suspended \| closed`                      |
+| plan                   | text        | `starter \| growth \| pro` (trial = growth features, BRD §12) |
+| trial_ends_at          | timestamptz | signup + 14 days                                              |
+| created_at, updated_at | timestamptz |                                                               |
 
 **users**
-| column | type | notes |
-| --- | --- | --- |
-| id | uuid pk | |
-| email | citext unique | lowercased, trimmed |
-| mobile | text | E.164 `+91XXXXXXXXXX`, not unique (shared office phones exist) |
-| full_name | text | 1–120 chars |
-| password_hash | text null | bcrypt cost 12; null for Google-only users |
-| email_verified_at | timestamptz null | |
-| totp_secret_enc | text null | AES-256-GCM with key from env |
-| status | text | `active \| disabled` |
-| failed_login_count, locked_until | int, timestamptz | progressive lockout: 5 fails → 15 min |
-| last_login_at, created_at, updated_at | timestamptz | |
+
+| column                                | type             | notes                                                          |
+| ------------------------------------- | ---------------- | -------------------------------------------------------------- |
+| id                                    | uuid pk          |                                                                |
+| email                                 | citext unique    | lowercased, trimmed                                            |
+| mobile                                | text             | E.164 `+91XXXXXXXXXX`, not unique (shared office phones exist) |
+| full_name                             | text             | 1–120 chars                                                    |
+| password_hash                         | text null        | bcrypt cost 12; null for Google-only users                     |
+| email_verified_at                     | timestamptz null |                                                                |
+| totp_secret_enc                       | text null        | AES-256-GCM with key from env                                  |
+| status                                | text             | `active \| disabled`                                           |
+| failed_login_count, locked_until      | int, timestamptz | progressive lockout: 5 fails → 15 min                          |
+| last_login_at, created_at, updated_at | timestamptz      |                                                                |
 
 **refresh_tokens**: id, user_id, membership_id, family_id, token_hash (sha256, unique), expires_at, revoked_at, revoked_reason, replaced_by_id, ip, user_agent, created_at.
 
@@ -59,26 +61,29 @@ masters.party:view|create|edit|delete|export
 masters.series:view|create|edit
 platform.billing:view|edit
 ```
-Later sprints extend the catalogue (inventory.*, purchase.*, sales.*, production.*, accounts.*, gst.*, reports.*).
+
+Later sprints extend the catalogue (inventory._, purchase._, sales._, production._, accounts._, gst._, reports.*).
 
 ### Default roles (BRD §8.1), seeded per tenant
 
-| Role | Billable | Sprint-1 permissions |
-| --- | --- | --- |
-| Owner | yes | all (always all, including future permissions: computed, not stored) |
-| Admin | yes | all except `platform.billing:*` |
-| Accountant | yes | view all masters; edit company, tax rates, parties, series; audit view |
-| Purchase | yes | items/parties view, create and edit (vendors); units/categories view |
-| Sales | yes | items view; parties view, create and edit (customers) |
-| Store | yes | items, units, godowns view |
-| Production | yes | items view, create and edit; units view |
-| CA | **no** | view on all masters, export, audit view |
-| Viewer | **no** | view on all masters |
+| Role       | Billable | Sprint-1 permissions                                                   |
+| ---------- | -------- | ---------------------------------------------------------------------- |
+| Owner      | yes      | all (always all, including future permissions: computed, not stored)   |
+| Admin      | yes      | all except `platform.billing:*`                                        |
+| Accountant | yes      | view all masters; edit company, tax rates, parties, series; audit view |
+| Purchase   | yes      | items/parties view, create and edit (vendors); units/categories view   |
+| Sales      | yes      | items view; parties view, create and edit (customers)                  |
+| Store      | yes      | items, units, godowns view                                             |
+| Production | yes      | items view, create and edit; units view                                |
+| CA         | **no**   | view on all masters, export, audit view                                |
+| Viewer     | **no**   | view on all masters                                                    |
 
 ## 3. Flows & rules
 
 ### 3.1 Sign up (MS-01, BRD §13.1)
+
 `POST /api/v1/auth/signup` `{ fullName, email, mobile, password, gstin, acceptTerms: true }`
+
 1. Validate: the GSTIN format and checksum (`@ekaro/core/gstin`), email not registered (409 `EMAIL_TAKEN`), password policy.
 2. `GspProvider.lookupGstin(gstin)` returns legal name, trade name, address, state code and status. If the GSTIN is not `Active` → 422 `GSTIN_INACTIVE`. The mock adapter returns deterministic data.
 3. One platform transaction: create the user, then the tenant (trial, 14 days), then the tenant bootstrap (with `app.tenant_id` set): company profile, head-office branch (from GSTIN address), "Main" godown, 9 system roles, the UQC units, the GST tax-rate slabs, default document series for the current FY, and an Owner membership.
@@ -87,6 +92,7 @@ Later sprints extend the catalogue (inventory.*, purchase.*, sales.*, production
 `GET /api/v1/platform/gstin/:gstin` is public and rate limited to 10 per minute per IP. It returns the lookup for form auto-fill.
 
 ### 3.2 Login / session
+
 - `POST /auth/login {email, password, tenantId?}`. On success: if the user has 1 active membership, log into it. If there are more and no `tenantId` was given, return `{ requiresTenantSelection: true, tenants: [...] , selectionToken }` (5-minute signed token), then `POST /auth/select-tenant`.
 - `POST /auth/refresh` (cookie) rotates the token. Reuse of a revoked token revokes the family and returns 401 `REFRESH_REUSED`.
 - `POST /auth/logout` revokes the family and clears the cookie. `POST /auth/switch-tenant {tenantId}` issues new tokens for another membership.
@@ -94,6 +100,7 @@ Later sprints extend the catalogue (inventory.*, purchase.*, sales.*, production
 - Failed login: the generic 401 `INVALID_CREDENTIALS`, with lockout after 5 failures (423 `ACCOUNT_LOCKED`).
 
 ### 3.3 Users & roles (tenant-scoped)
+
 - `GET/POST /users`: POST sends an invitation (email via outbox with a token link). If the email already exists as a user, they get a membership on acceptance.
 - `POST /auth/accept-invitation {token, fullName?, password?}`.
 - `PATCH /users/:membershipId {roleId, allBranches, branchIds, status, version}`. Rules: you cannot change your own role, you cannot disable the last active Owner, and only an Owner can assign the Owner role.
@@ -101,9 +108,11 @@ Later sprints extend the catalogue (inventory.*, purchase.*, sales.*, production
 - The minimum-2-billable-users billing rule (BRD §12) is a billing concern and is not enforced at membership level.
 
 ### 3.4 Audit
+
 `GET /audit-logs?table=&rowId=&userId=&from=&to=` is paginated with keyset (`cursor`) pagination and requires `audit.log:view`.
 
 ## 4. Acceptance criteria
+
 - A new signup produces a working tenant with all seeded masters. The owner can call `GET /auth/me` and gets all permissions.
 - A user with two memberships can switch tenants, and data never crosses between them (e2e plus raw-SQL RLS test).
 - Refresh rotation works. Replaying an old refresh token kills the session family.

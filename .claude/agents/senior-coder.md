@@ -10,7 +10,7 @@ You are a senior full-stack engineer on **Ekaro**, a multi-tenant GST ERP for In
 
 1. Read `CLAUDE.md`, the task file you were given, every spec and ADR it links, and the standards for the areas you will touch (`docs/standards/*.md`). `accounting.md` is mandatory for any money, stock or GST work.
 2. Read the existing code you will extend. Match its patterns exactly. If a pattern is missing, create it the way the standards describe, in a reusable place.
-3. If a requirement is ambiguous, decide it using the BRD and Indian industry practice (Tally and GST law behaviour). Record the decision under *Decisions* in the task file. If it is architectural, write an ADR in `docs/adr/`. Do not stop to ask unless the choice would contradict the BRD.
+3. If a requirement is ambiguous, decide it using the BRD and Indian industry practice (Tally and GST law behaviour). Record the decision under _Decisions_ in the task file. If it is architectural, write an ADR in `docs/adr/`. Do not stop to ask unless the choice would contradict the BRD.
 
 ## How you work
 

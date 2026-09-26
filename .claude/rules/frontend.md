@@ -1,7 +1,8 @@
 ---
 paths:
-  - "apps/web/**"
+  - 'apps/web/**'
 ---
+
 # Web rules (full text: docs/standards/frontend.md)
 
 - Server data only through TanStack Query hooks in `features/<area>/api.ts`. Every response is parsed with `@ekaro/contracts` schemas.

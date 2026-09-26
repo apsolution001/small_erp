@@ -2,13 +2,13 @@
 
 Write the test first. A bug fix starts with a failing test that reproduces it.
 
-| Layer | Tool | What | Where |
-| --- | --- | --- | --- |
-| `packages/core` | Vitest | every function, including edge cases (rounding, zero, negative, huge values); property tests for money | `*.test.ts` next to source |
-| API unit | Vitest | service business rules with the repository mocked | `*.spec.ts` next to source |
-| API integration | Vitest + supertest + real Postgres | HTTP → DB round trip, permissions, RLS isolation, posting correctness | `apps/api/test/**/*.e2e-spec.ts` |
-| Web unit | Vitest + Testing Library | forms, hooks, formatting | `*.test.tsx` next to source |
-| Web e2e | Playwright | critical journeys: sign up → first invoice; login; masters CRUD | `apps/web/e2e/` |
+| Layer           | Tool                               | What                                                                                                   | Where                            |
+| --------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| `packages/core` | Vitest                             | every function, including edge cases (rounding, zero, negative, huge values); property tests for money | `*.test.ts` next to source       |
+| API unit        | Vitest                             | service business rules with the repository mocked                                                      | `*.spec.ts` next to source       |
+| API integration | Vitest + supertest + real Postgres | HTTP → DB round trip, permissions, RLS isolation, posting correctness                                  | `apps/api/test/**/*.e2e-spec.ts` |
+| Web unit        | Vitest + Testing Library           | forms, hooks, formatting                                                                               | `*.test.tsx` next to source      |
+| Web e2e         | Playwright                         | critical journeys: sign up → first invoice; login; masters CRUD                                        | `apps/web/e2e/`                  |
 
 ## Mandatory tests
 

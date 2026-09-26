@@ -1,7 +1,8 @@
 ---
 paths:
-  - "apps/api/**"
+  - 'apps/api/**'
 ---
+
 # API rules (full text: docs/standards/backend.md, database.md, security.md)
 
 - Module layout: controller → service → repository → schema. Cross-module access only through exported services or events.

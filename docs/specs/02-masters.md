@@ -3,6 +3,7 @@
 BRD refs: MS-01..MS-06, §13. ADRs: 0003, 0004, 0005, 0010. All tables are tenant tables: standard columns plus RLS plus the audit trigger (see `docs/standards/database.md`).
 
 ## 1. Reference data in code (`@ekaro/core`)
+
 - **Indian states and UTs** with GST state codes (`01` J&K … `38` Ladakh, `97` Other Territory) → `STATES`, `isValidStateCode`.
 - **GSTIN**: format `^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$`, mod-36 checksum. The state code is the first 2 characters and the PAN is characters 3–12.
 - **UQC list** (GST unit quantity codes: NOS, KGS, MTR, LTR, BOX, PCS, SET, TON, ...) → seeded as units.
@@ -48,24 +49,26 @@ branch_id, doc_type (enum in contracts: `purchase_requisition, purchase_order, g
 
 ## 3. Endpoints (all under `/api/v1`, standard list semantics)
 
-| Resource | Routes | Notes |
-| --- | --- | --- |
-| company | `GET /company`, `PATCH /company` | valuation_method editable only until the first stock posting |
-| branches | CRUD `/branches` | cannot deactivate the head office; cannot deactivate while it has active godowns |
-| godowns | CRUD `/godowns` (`?branchId=`) | |
-| units | CRUD `/units` | a unit used by an item cannot be deleted (409 `IN_USE`); deactivate instead |
-| tax-rates | CRUD `/tax-rates` | |
-| item-categories | CRUD `/item-categories` (tree in response with `?tree=true`) | |
-| items | CRUD `/items` (`?q=&kind=&categoryId=&active=`), `GET /items/:id/tax-rates`, `POST /items/:id/tax-rates` | units and conversions are nested in the create/update payload |
-| parties | CRUD `/parties` (`?q=&type=&active=`) | addresses nested in the payload |
-| series | `GET/POST/PATCH /document-series` | `next_number` can only increase |
+| Resource        | Routes                                                                                                   | Notes                                                                            |
+| --------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| company         | `GET /company`, `PATCH /company`                                                                         | valuation_method editable only until the first stock posting                     |
+| branches        | CRUD `/branches`                                                                                         | cannot deactivate the head office; cannot deactivate while it has active godowns |
+| godowns         | CRUD `/godowns` (`?branchId=`)                                                                           |                                                                                  |
+| units           | CRUD `/units`                                                                                            | a unit used by an item cannot be deleted (409 `IN_USE`); deactivate instead      |
+| tax-rates       | CRUD `/tax-rates`                                                                                        |                                                                                  |
+| item-categories | CRUD `/item-categories` (tree in response with `?tree=true`)                                             |                                                                                  |
+| items           | CRUD `/items` (`?q=&kind=&categoryId=&active=`), `GET /items/:id/tax-rates`, `POST /items/:id/tax-rates` | units and conversions are nested in the create/update payload                    |
+| parties         | CRUD `/parties` (`?q=&type=&active=`)                                                                    | addresses nested in the payload                                                  |
+| series          | `GET/POST/PATCH /document-series`                                                                        | `next_number` can only increase                                                  |
 
 DELETE on a master is soft (it sets is_active = false) once referenced. Referencing tables arrive in later sprints, so the Sprint 1 rule is: masters are **deactivated**, never hard deleted, except units, tax rates and categories that are unreferenced.
 
 ## 4. Seeds per tenant (in the bootstrap, idempotent)
+
 Units: NOS, PCS, KGS, GMS, TON, MTR, CMS, LTR, MLT, BOX, BAG, SET, PAC, ROL, SQM, SQF, DOZ, OTH (mapped to UQC). Tax rates: as above. Series: default series for every doc_type for the head office for the current FY, with prefixes like `SI/26-27/` (sales invoice), `PO/26-27/`, … and padding 4, so `SI/26-27/0001` is 13 characters.
 
 ## 5. Acceptance criteria
+
 - Every master has CRUD, search, pagination, optimistic locking, audit rows and isolation tests.
 - GSTIN checksum and state-code consistency are enforced on company, branches and parties.
 - An item with UoM conversions round-trips exactly (decimal strings preserved). The effective-dated tax rate lookup returns the right slab for a given date.
