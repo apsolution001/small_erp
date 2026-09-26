@@ -4,6 +4,7 @@ import { type Redis } from 'ioredis';
 import { type Env } from '../../config/env.js';
 import { ENV } from '../../config/env.module.js';
 import { REDIS, RedisModule } from '../redis/redis.module.js';
+import { rateLimitSubject } from './client-ip.js';
 import { RedisThrottlerStorage } from './redis-throttler.storage.js';
 
 const MINUTE_MS = 60_000;
@@ -18,9 +19,12 @@ export const THROTTLERS = {
   gstinIp: 'gstin-ip',
 } as const;
 
-/** The client IP as Express resolved it with `trust proxy` (TRUST_PROXY_HOPS). */
+/**
+ * The client IP as Express resolved it with `trust proxy` (TRUST_PROXY_HOPS), as a rate-limit
+ * subject: IPv4 as is (also IPv4-mapped), IPv6 by its /64.
+ */
 function clientIp(req: Record<string, unknown>): string {
-  return typeof req.ip === 'string' ? req.ip : 'unknown';
+  return rateLimitSubject(typeof req.ip === 'string' ? req.ip : undefined);
 }
 
 /** The email the request is about (login, signup), normalised like the contracts schema does. */
