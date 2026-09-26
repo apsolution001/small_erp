@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: Monorepo scaffold, tooling, local infra
-status: todo
+status: done
 sprint: 0
 depends_on: [T-001]
 spec: docs/adr/0001-modular-monolith-monorepo.md, docs/adr/0002-technology-stack.md
