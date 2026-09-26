@@ -21,3 +21,4 @@ The format is Context → Decision → Consequences. ADRs are immutable once `Ac
 | 0015 | [Sessions, access resolution and platform access to module tables](0015-sessions-access-resolution.md)                    | Accepted, amended by 0016 |
 | 0016 | [Session hardening after the T-104 security review](0016-session-hardening.md)                                            | Accepted                  |
 | 0017 | [User directory for tenant code, granting authority, audit row keys and the outbox](0017-user-directory-grants-outbox.md) | Accepted                  |
+| 0018 | [Web session and data layer](0018-web-session-data-layer.md)                                                              | Accepted                  |
