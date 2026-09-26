@@ -11,6 +11,9 @@ import { REQUEST_ID_HEADER, requestIdMiddleware } from './infra/logging/request-
  * Order matters: the request id comes first so every later log line and error carries it.
  */
 export function configureApp(app: NestExpressApplication, env: Env): void {
+  // `req.ip` (rate limits, session records) is taken TRUST_PROXY_HOPS back in X-Forwarded-For;
+  // with 0 the header is ignored, so a client can never choose its own IP.
+  app.set('trust proxy', env.TRUST_PROXY_HOPS);
   app.use(requestIdMiddleware);
   app.useLogger(app.get(Logger));
   app.use(helmet());
