@@ -1,7 +1,7 @@
 ---
 id: T-103
 title: 'API foundation: config, logging, errors, DB roles, RLS helpers, audit trigger, tx context, test harness'
-status: todo
+status: in-progress
 sprint: 1
 area: server
 depends_on: [T-003]

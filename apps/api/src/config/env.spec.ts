@@ -1,0 +1,109 @@
+import { describe, expect, it } from 'vitest';
+import { EnvValidationError, parseEnv, type RawEnv } from './env.js';
+
+const valid: RawEnv = {
+  NODE_ENV: 'development',
+  PORT: '3000',
+  APP_ORIGIN: 'http://localhost:5173',
+  LOG_LEVEL: 'debug',
+  DATABASE_URL_OWNER: 'postgres://ekaro_owner:pw@localhost:5432/ekaro',
+  DATABASE_URL_APP: 'postgres://ekaro_app:pw@localhost:5432/ekaro',
+  DATABASE_URL_PLATFORM: 'postgresql://ekaro_platform:pw@localhost:5432/ekaro',
+  REDIS_URL: 'redis://localhost:6379',
+  JWT_ACCESS_SECRET: 'a-development-secret-that-is-at-least-32-chars',
+  JWT_ACCESS_TTL_SECONDS: '900',
+  JWT_ISSUER: 'ekaro-api',
+  JWT_AUDIENCE: 'ekaro-web',
+  REFRESH_TOKEN_TTL_DAYS: '30',
+  DATA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+  GSP_PROVIDER: 'mock',
+  SMTP_HOST: 'localhost',
+  SMTP_PORT: '1025',
+  MAIL_FROM: 'Ekaro <no-reply@ekaro.local>',
+};
+
+function errorOf(raw: RawEnv): EnvValidationError {
+  try {
+    parseEnv(raw);
+  } catch (error) {
+    if (error instanceof EnvValidationError) return error;
+    throw error;
+  }
+  throw new Error('expected parseEnv to throw');
+}
+
+describe('parseEnv', () => {
+  it('parses and coerces a valid environment', () => {
+    const env = parseEnv(valid);
+    expect(env.PORT).toBe(3000);
+    expect(env.JWT_ACCESS_TTL_SECONDS).toBe(900);
+    expect(env.REFRESH_TOKEN_TTL_DAYS).toBe(30);
+    expect(env.SMTP_PORT).toBe(1025);
+    expect(env.DB_POOL_MAX).toBe(10);
+    expect(env.DATABASE_URL_PLATFORM).toBe(valid.DATABASE_URL_PLATFORM);
+  });
+
+  it('applies defaults for optional settings', () => {
+    const { NODE_ENV: _n, PORT: _p, LOG_LEVEL: _l, ...rest } = valid;
+    const env = parseEnv(rest);
+    expect(env.NODE_ENV).toBe('development');
+    expect(env.PORT).toBe(3000);
+    expect(env.LOG_LEVEL).toBe('info');
+  });
+
+  it('does not require the owner URL at runtime (the API never connects as owner)', () => {
+    const { DATABASE_URL_OWNER: _o, ...rest } = valid;
+    expect(parseEnv(rest).DATABASE_URL_OWNER).toBeUndefined();
+  });
+
+  it('ignores unrelated variables', () => {
+    expect(parseEnv({ ...valid, PATH: '/usr/bin', HOME: '/root' })).not.toHaveProperty('PATH');
+  });
+
+  it('lists every invalid variable by name in one readable message', () => {
+    const error = errorOf({
+      ...valid,
+      DATABASE_URL_APP: 'not a url',
+      DATABASE_URL_PLATFORM: 'mysql://x@localhost/ekaro',
+      REDIS_URL: undefined,
+      PORT: 'eighty',
+    });
+    expect(error.message).toMatch(/^Invalid environment configuration:\n/);
+    expect(error.issues.map((i) => i.variable).sort()).toEqual([
+      'DATABASE_URL_APP',
+      'DATABASE_URL_PLATFORM',
+      'PORT',
+      'REDIS_URL',
+    ]);
+    expect(error.message).toContain('  - DATABASE_URL_APP: ');
+    expect(error.message).toContain('  - REDIS_URL: ');
+  });
+
+  it('never echoes a rejected value into the message (it may be a secret)', () => {
+    const error = errorOf({ ...valid, JWT_ACCESS_SECRET: 'short-secret-value' });
+    expect(error.issues.map((i) => i.variable)).toEqual(['JWT_ACCESS_SECRET']);
+    expect(error.message).not.toContain('short-secret-value');
+  });
+
+  it('requires DATA_ENCRYPTION_KEY to decode to exactly 32 bytes', () => {
+    const error = errorOf({
+      ...valid,
+      DATA_ENCRYPTION_KEY: Buffer.alloc(16).toString('base64'),
+    });
+    expect(error.issues.map((i) => i.variable)).toEqual(['DATA_ENCRYPTION_KEY']);
+  });
+
+  it('rejects the example JWT secret in production', () => {
+    const error = errorOf({
+      ...valid,
+      NODE_ENV: 'production',
+      JWT_ACCESS_SECRET: 'change-me-to-a-long-random-string-at-least-32-chars',
+    });
+    expect(error.issues.map((i) => i.variable)).toEqual(['JWT_ACCESS_SECRET']);
+  });
+
+  it('rejects an unknown GSP provider and log level', () => {
+    const error = errorOf({ ...valid, GSP_PROVIDER: 'acme', LOG_LEVEL: 'verbose' });
+    expect(error.issues.map((i) => i.variable).sort()).toEqual(['GSP_PROVIDER', 'LOG_LEVEL']);
+  });
+});
