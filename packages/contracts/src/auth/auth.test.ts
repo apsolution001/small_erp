@@ -72,6 +72,16 @@ describe('login and tenant selection', () => {
     expect(pathsOf(loginSchema.safeParse({ email: 'a@b.in', password: '' }))).toEqual(['password']);
   });
 
+  it('login refuses a password over 72 UTF-8 bytes (bcrypt would ignore the rest)', () => {
+    expect(loginSchema.safeParse({ email: 'a@b.in', password: 'a'.repeat(72) }).success).toBe(true);
+    expect(pathsOf(loginSchema.safeParse({ email: 'a@b.in', password: 'a'.repeat(73) }))).toEqual([
+      'password',
+    ]);
+    expect(pathsOf(loginSchema.safeParse({ email: 'a@b.in', password: '₹'.repeat(25) }))).toEqual([
+      'password',
+    ]);
+  });
+
   it('parses both login outcomes', () => {
     const tenantId = uuidv7();
     const selection = {

@@ -28,7 +28,8 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    if (context.getType() !== 'http') return true;
+    // Only HTTP carries a Bearer token today; any other transport is refused until it has its own.
+    if (context.getType() !== 'http') return false;
     const controller: Type = context.getClass();
     if (isPublicRoute(this.reflector, context.getHandler(), controller)) return true;
 

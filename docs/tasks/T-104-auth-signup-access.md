@@ -133,6 +133,81 @@ Run on 2026-09-26 against local Postgres 16.13 + Redis 7.0.15, test DB `ekaro_t1
 - `db:migrate` on a fresh `ekaro_t104`: `migrations applied`.
 - Review: the `code-reviewer` agent could not be invoked from this sub-agent session (no agent tool). A self-review against the backend, database, security and testing standards was done instead. Run `code-reviewer` on this branch before merging.
 
+## Security review fixes
+
+Review of the T-104 auth work, fixed on 2026-09-26. The architectural decisions are in [ADR 0016](../adr/0016-session-hardening.md), which amends ADR 0006 and ADR 0015. These supersede Decisions 8, 9 and 10 above where they differ.
+
+### Blocking
+
+1. **Switch-tenant minting.** `POST /auth/switch-tenant` requires the refresh cookie. `SessionService.switchTo` runs one transaction: it locks the cookie's session, then its token, and requires both to be live and `family_id === principal.sessionId`. It revokes the family (`switched`) and issues the new one, which keeps the old absolute end, so switching never extends a login. No cookie gives 401 `UNAUTHENTICATED`. A cookie of another session gives 401 `TOKEN_INVALID`, and nothing is revoked. A logged-out or reused session gives 401 `REFRESH_REUSED`, because any revoked token is reuse (ADR 0006). Every 401 clears the cookie. The target is checked before the transaction, so a 403 `FORBIDDEN` (not a member) leaves the session untouched.
+2. **Mock GSP in production.** Env validation refuses `NODE_ENV=production` with `GSP_PROVIDER=mock`, through a `TEST_ONLY_GSP_PROVIDERS` set. Until a real adapter exists, production cannot boot, by design.
+3. **Secrets and PII in logs.** `serializeError` (in `infra/logging`) is the pino `err` serializer and is also used by `ProblemDetailsFilter`. It reduces a `DrizzleQueryError`, a pg `DatabaseError`, or an error whose `cause` is one, to `{type, sqlstate, constraint, table, column}`. Other errors keep type, `code`, `status`, message and stack, and their causes are reduced the same way. It works on pino-http's `raw` original, because pino's standard serializer appends every cause's message, SQL included. A `logMethod` hook stops pino from using a query error's message as the log message.
+
+### Should
+
+4. **Family revocation race.** New `sessions` table (the family, platform table with forced RLS). `refresh_tokens.family_id` references it, and `refresh_tokens.user_id` and `membership_id` moved to it. Rotation, logout, reuse detection and switch all lock the session row first (`FOR UPDATE`), then the token row, and a revoked session refuses rotation.
+5. **Absolute session lifetime.** `SESSION_IDLE_DAYS=7` and `SESSION_ABSOLUTE_DAYS=30` (env, `.env.example`), with `REFRESH_TOKEN_TTL_DAYS` removed. A token's `expires_at = min(now + idle, absolute_expires_at)`. Env validation refuses idle > absolute.
+6. **Access-cache staleness.** A per-tenant generation counter (`ekaro:access:{tenant}:generation`, the same hash tag as the entries). The hooks do `INCR` plus the delete in one `MULTI`. `AccessCache.getOrLoad` reads the generation before `load()` and writes through a Lua compare-and-set. The hooks keep their signatures and never throw (logged at `error`). `SessionAccessLoader.fresh()` (login, refresh, switch) no longer writes the cache, because the tenant is not known before its load.
+7. **Lockout enumeration.** `LoginLockout` (Redis, keys from a keyed pseudonym of the normalised email) replaces the `users` columns. It locks for 15 minutes after 5 consecutive failures, each within 24 hours of the previous one. A locked attempt spends `verifyNothing`. `users.failed_login_count` and `locked_until` are dropped. `state()` and `clear()` exist for support unlock and tests.
+8. **Throttling.** `rateLimitSubject()` counts IPv6 by /64 and `::ffff:a.b.c.d` as `a.b.c.d`. Production requires an explicit `TRUST_PROXY_HOPS` (0 is allowed).
+9. **Security events.** `SecurityEventLog` writes `warn` lines `{event, userId?, familyId?, ipHash?, emailHash?, reason?}`. The events are `auth.login_failed`, `auth.lockout` (`started` / `refused`), `auth.refresh_reused`, `auth.access_revoked`, `auth.disabled_account` and `auth.switch_denied`. Emails and IPs are HMAC pseudonyms (`Pseudonymizer`, key by HKDF from `DATA_ENCRYPTION_KEY`).
+
+### Nits
+
+- The selection token has a `jti` and is single-use (`SelectionTokenLedger`, Redis `SET NX PX` until the token's `exp`). It is consumed before anything else.
+- `exp` is required by both token payload schemas.
+- Login password at most 72 UTF-8 bytes in `loginSchema` (contracts).
+- `JwtAuthGuard` and `PermissionGuard` deny non-HTTP contexts.
+- `RouteAccessAudit` (access module, `DiscoveryService`) refuses to boot when a route resolves to more than one of `@Public()`, `@Authenticated()` and `@RequirePermission()`, controller-level declarations included.
+- `ekaro_platform` loses SELECT on `godowns`, `units`, `tax_rates` and `document_series`. The isolation test now proves it cannot read them, and uses `branches` for the context-limited read.
+- ADR 0015 notes that `ekaro_platform` can set its own tenant context.
+- Owner membership: `onConflictDoNothing({ target: [tenant_id, user_id] })`, then an assertion that the row is an active, all-branches membership with the Owner role.
+- FKs: `refresh_tokens.replaced_by_id` → `refresh_tokens`, and `sessions (membership_id, user_id)` → `memberships (id, user_id)` (new unique `memberships_id_user_unique`). Together they make the user/membership pair consistent by construction.
+- The GSTIN lookup maps a GSP failure to 503 `SERVICE_UNAVAILABLE` (`lookupGstinOrUnavailable`, shared with signup).
+- The cookie is `__Secure-ekaro_refresh` when `Secure`, and `ekaro_refresh` for local http (`refreshCookieName(env)`). e2e runs now force `REFRESH_COOKIE_SECURE=true`, so they test the deployed name whatever the local `.env` says.
+
+### Decisions
+
+1. **Lockout keeps 423 `ACCOUNT_LOCKED` (spec 01). This is an accepted trade-off.** Anyone can lock any email for 15 minutes with 5 wrong passwords. The 423 reveals nothing about the account, because unknown emails lock identically and every path spends one bcrypt compare. The per-email (10/min) and per-IP (20/min) limits bound the rate. A success resets the counter, and a lock is never extended by attempts made during it.
+2. **A login password over 72 bytes is a 422 `VALIDATION_FAILED`**, not `INVALID_CREDENTIALS`. No stored password can be longer (signup and invitations already cap it), the answer reveals nothing about the account, and the web can apply the same limit before sending.
+3. **Switch after logout answers `REFRESH_REUSED`.** Any revoked token presented again is reuse (ADR 0006). The session is already revoked, so nothing more changes.
+4. **The role seed inserts only the missing roles** instead of using `ON CONFLICT`. Role names are unique through the expression index `(tenant_id, lower(name))`, which a Drizzle conflict target cannot name. A bare `DO NOTHING` would also swallow other violations. The masters seeds (masters module, not changed here) keep a bare `DO NOTHING`: with SELECT revoked, a conflict target would fail with 42501, because Postgres needs SELECT on the target columns. Each of those tables has only its business key as a possible conflict.
+5. **Migration backfill.** `0005_sec_sessions_lockout` is the generated file, hand-ordered. It creates `sessions`, backfills one session per existing token family (absolute end = first token + 30 days; revoked with the family's non-`rotated` reason when every token is revoked), then adds the FK and drops the old columns. It lifts FORCE RLS on `refresh_tokens` only for the backfill, because the owner is subject to it. This was verified on the test database, which held families from the pre-fix run: `logout`, `reuse_detected`, `switched` and `access_revoked` came across unchanged.
+6. **Pseudonym key.** Derived from `DATA_ENCRYPTION_KEY` with HKDF under its own label, rather than a new secret. Rotating that key only resets lock counters and log correlation.
+
+### Migrations
+
+- `0005_sec_sessions_lockout.sql` (generated): `sessions`, the FKs, the backfill, and dropping `refresh_tokens.user_id` / `membership_id` and `users.failed_login_count` / `locked_until`.
+- `0006_sec_sessions_lockout_security.sql` (custom): RLS, the policy and grants on `sessions`; revoking SELECT on the four masters tables from `ekaro_platform`.
+
+Both carry the `sec_` names; the lead renumbers them at merge.
+
+### Changes the web (T-150) must know
+
+- The cookie is **`__Secure-ekaro_refresh`** in every https environment. The web never reads it; this matters only for tooling and cookie clean-up.
+- **`switch-tenant` now needs the refresh cookie** (`credentials: 'include'`). Treat its 401 like a failed refresh; the cookie has already been cleared.
+- The cookie now expires **7 days** after the last refresh, and sessions end 30 days after login whatever the activity (401 `TOKEN_EXPIRED` on refresh).
+- The selection token is single-use: a retry after any answer needs a new login.
+- A login password over 72 UTF-8 bytes is 422 `VALIDATION_FAILED` on `password`.
+- `GET /platform/gstin/:gstin` can answer 503 `SERVICE_UNAVAILABLE`.
+- No error code was added or renamed.
+
+### Verification (security fixes)
+
+Run on 2026-09-26 against local Postgres 16.13 and Redis 7.0.15, with test DB `ekaro_sec_test` (`TEST_DB_NAME=ekaro_sec_test`).
+
+- `pnpm format` / `pnpm format:check`: clean. `pnpm lint`: 4/4 successful. `pnpm typecheck`: 4/4 successful.
+- `pnpm test`: core **127**, contracts **292** (coverage thresholds kept), web **1**, api **142** passed. The new api specs cover the error serializer (a `DrizzleQueryError` carrying a bcrypt hash, an email and a token hash, logged through pino and through pino-http, never shows them), env production rules, session lifetimes, token `exp`/`jti`, pseudonyms and security events, access-cache Redis-down behaviour, `rateLimitSubject`, `RouteAccessAudit`, guard non-HTTP denial, and the GSTIN 503.
+- `pnpm --filter @ekaro/api test:e2e`: **12 files, 152 tests passed**, green on two consecutive runs.
+  - `sessions` (22): switch happy path (absolute end kept); switch without cookie, after logout, after reuse detection and with a foreign cookie (all 401, cookie cleared); 403 foreign tenant keeping the session; logout racing refresh ×10 leaves 0 live tokens; 7-day idle and 30-day absolute expiry, with the rotation cap at the absolute end; single-use selection token.
+  - `lockout` (7): unknown emails lock like real ones; a locked attempt spends `verifyNothing` and is not counted; security events carry only pseudonyms; no email in Redis keys.
+  - `access-cache` (3): the invalidation-during-load race does not cache the stale snapshot, for a membership and for a whole tenant.
+  - `throttling` (5): IPv6 /64 and IPv4-mapped bucketing.
+  - `signup` (18): `__Secure-` cookie, 7-day expiry, refuses a non-Owner existing membership.
+  - `isolation` (32): `sessions` is out of reach of `ekaro_app`, and `ekaro_platform` cannot read the four masters tables.
+  - `migrations` (3): 14 tables, all with forced RLS.
+- `db:migrate` on the fresh dev database `ekaro_sec`: `migrations applied`.
+
 ## Follow-ups
 
 - **T-105:**
@@ -146,13 +221,13 @@ Run on 2026-09-26 against local Postgres 16.13 + Redis 7.0.15, test DB `ekaro_t1
 - **T-150 (web), the auth contract:**
   - `POST /api/v1/auth/signup` `{fullName, email, mobile, password, gstin, acceptTerms: true}` → **201** `TokenResponse` + cookie. Errors: 409 `EMAIL_TAKEN`, 422 `GSTIN_INACTIVE`, 422 `VALIDATION_FAILED` (`errors[].path`, including `password` with code `too_common`), 429 `RATE_LIMITED`, 503 `SERVICE_UNAVAILABLE`.
   - `GET /api/v1/platform/gstin/:gstin` (public, 10/min/IP) → `GstinLookupResponse` for auto-fill (it returns `Cancelled` registrations too; signup refuses them).
-  - `POST /api/v1/auth/login` `{email, password, tenantId?}` → **200** either `TokenResponse` + cookie, or `TenantSelectionResponse` `{requiresTenantSelection: true, selectionToken, tenants: [{tenantId, name, slug, roleName}]}` with no cookie. Errors: 401 `INVALID_CREDENTIALS`, 401 `ACCOUNT_DISABLED`, 423 `ACCOUNT_LOCKED`, 403 `FORBIDDEN` (no company, or not a member of `tenantId`), 429.
-  - `POST /api/v1/auth/select-tenant` `{selectionToken, tenantId}` → 200 `TokenResponse` + cookie. The token expires after 5 minutes (401 `TOKEN_EXPIRED`); send the user back to login.
+  - `POST /api/v1/auth/login` `{email, password (at most 72 UTF-8 bytes, else 422), tenantId?}` → **200** either `TokenResponse` + cookie, or `TenantSelectionResponse` `{requiresTenantSelection: true, selectionToken, tenants: [{tenantId, name, slug, roleName}]}` with no cookie. Errors: 401 `INVALID_CREDENTIALS`, 401 `ACCOUNT_DISABLED`, 423 `ACCOUNT_LOCKED`, 403 `FORBIDDEN` (no company, or not a member of `tenantId`), 429.
+  - `POST /api/v1/auth/select-tenant` `{selectionToken, tenantId}` → 200 `TokenResponse` + cookie. The token expires after 5 minutes (401 `TOKEN_EXPIRED`) and is **single-use** (a second use is 401 `TOKEN_INVALID`, also after a 403); send the user back to login.
   - `POST /api/v1/auth/refresh` (no body; cookie) → 200 `TokenResponse` + new cookie. Any 401 (`UNAUTHENTICATED`, `TOKEN_INVALID`, `TOKEN_EXPIRED`, `REFRESH_REUSED`, `ACCOUNT_DISABLED`) or 403 clears the cookie: go to login. **Serialise refreshes**: concurrent refreshes with one cookie end the session.
   - `POST /api/v1/auth/logout` (cookie) → 204, cookie cleared. It works with an expired access token.
-  - `POST /api/v1/auth/switch-tenant` `{tenantId}` with `Authorization: Bearer` → 200 `TokenResponse` + new cookie. The previous session is ended. Reset all tenant-scoped query caches.
+  - `POST /api/v1/auth/switch-tenant` `{tenantId}` with `Authorization: Bearer` **and the refresh cookie** (`credentials: 'include'`) → 200 `TokenResponse` + new cookie. The previous session is ended. Reset all tenant-scoped query caches. Any 401 (`UNAUTHENTICATED` without the cookie, `TOKEN_INVALID`, `TOKEN_EXPIRED`, `REFRESH_REUSED`) clears the cookie: go to login. 403 `FORBIDDEN` (not a member) keeps the session. See "Security review fixes".
   - `GET /api/v1/auth/me` (Bearer) → `MeResponse` `{ user: {id, email, fullName, mobile}, tenant: {id, slug, name, status, plan, trialEndsAt}, membership: {id, role: {id, name}, allBranches, branchIds, status}, permissions: Permission[] (catalogue order; all for Owner) }`. Drive `useCan()` from `permissions`.
-  - The access token lives in memory only (15 minutes; claims `sub, tid, mid, sid, iss, aud`). The cookie `ekaro_refresh` is `HttpOnly; SameSite=Strict; Path=/api/v1/auth`, with `Secure` except local http (`REFRESH_COOKIE_SECURE=false`). Use `credentials: 'include'` on the auth calls; the API's CORS allows `APP_ORIGIN` with credentials.
+  - The access token lives in memory only (15 minutes; claims `sub, tid, mid, sid, iss, aud, iat, exp`). The cookie is `__Secure-ekaro_refresh` (`ekaro_refresh` only for local http, `REFRESH_COOKIE_SECURE=false`), `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth`, expiring 7 days after the last refresh and at most 30 days after login. The web never reads it. Use `credentials: 'include'` on the auth calls; the API's CORS allows `APP_ORIGIN` with credentials.
   - Validation errors are **422** `VALIDATION_FAILED` with `errors[{path, message, code}]`; malformed JSON is 400 `BAD_REQUEST`.
 - **Ops:** set `TRUST_PROXY_HOPS` to the number of proxies in front of the API (1 behind a single load balancer), and `REFRESH_COOKIE_SECURE=true` (enforced in production).
 - **Security hardening (later):** JWT key rotation by `kid` (security standard) is not implemented; there is a single `JWT_ACCESS_SECRET`. A session list and "sign out everywhere" can use the `refresh_tokens` metadata (IP, user agent). Checking the session table on sensitive routes (ADR 0006) is for T-105 user management and billing.

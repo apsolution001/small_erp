@@ -4,6 +4,7 @@ import { type LoggerOptions } from 'pino';
 import { HEALTH_PATH } from '../../app.constants.js';
 import { type Env } from '../../config/env.js';
 import { type RequestContext } from '../tenancy/request-context.js';
+import { logMessageOf, serializeError } from './error-serializer.js';
 import { requestIdOf } from './request-id.js';
 
 type LoggerEnv = Pick<Env, 'LOG_LEVEL' | 'NODE_ENV'>;
@@ -52,11 +53,34 @@ function contextFields(): Record<string, string> {
   return fields;
 }
 
+/** The Error under `err` of a log call's first argument, if any. */
+function errOf(first: unknown): Error | undefined {
+  if (typeof first !== 'object' || first === null || !('err' in first)) return undefined;
+  const err: unknown = first.err;
+  return err instanceof Error ? err : undefined;
+}
+
 /** Base Pino options (also used directly by tests and, later, the worker). */
 export function loggerOptions(env: LoggerEnv): LoggerOptions {
   return {
     level: env.LOG_LEVEL,
     redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
+    // Failed queries carry their SQL and parameters (hashes, emails): see serializeError.
+    serializers: { err: serializeError },
+    hooks: {
+      // Without a message, pino would use the error's own message, which for a failed query is
+      // its SQL and parameters. Log an Error under `err`, with a safe message instead.
+      logMethod(args, method) {
+        const [first, ...rest] = args as unknown[];
+        const err = first instanceof Error ? first : errOf(first);
+        if (err === undefined || typeof rest[0] === 'string') {
+          method.apply(this, args);
+          return;
+        }
+        const obj = first instanceof Error ? { err: first } : first;
+        method.apply(this, [obj, logMessageOf(err), ...rest] as Parameters<typeof method>);
+      },
+    },
     mixin: contextFields,
   };
 }

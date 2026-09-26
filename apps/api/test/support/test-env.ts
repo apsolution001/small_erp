@@ -37,12 +37,11 @@ export function loadTestEnv(): TestEnv {
   const overrides = {
     NODE_ENV: 'test',
     LOG_LEVEL: raw.TEST_LOG_LEVEL ?? 'silent',
-    // The tests assert the production cookie attributes; a local `.env` turns Secure off for
-    // http development, which must not change what the tests see.
-    REFRESH_COOKIE_SECURE: 'true',
     THROTTLE_AUTH_PER_MINUTE: UNTHROTTLED,
     THROTTLE_ACCOUNT_PER_MINUTE: UNTHROTTLED,
     THROTTLE_GSTIN_PER_MINUTE: UNTHROTTLED,
+    // As deployed: a Secure `__Secure-` cookie (supertest sends it over http regardless).
+    REFRESH_COOKIE_SECURE: 'true',
     DATABASE_URL_OWNER: onDatabase(raw.DATABASE_URL_OWNER, database),
     DATABASE_URL_APP: onDatabase(raw.DATABASE_URL_APP, database),
     DATABASE_URL_PLATFORM: onDatabase(raw.DATABASE_URL_PLATFORM, database),

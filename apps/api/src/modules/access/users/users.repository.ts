@@ -38,7 +38,7 @@ export interface MembershipChanges {
 }
 
 /**
- * Memberships with their users (through the auth module's `tenant_users` directory, ADR 0016) and
+ * Memberships with their users (through the auth module's `tenant_users` directory, ADR 0017) and
  * roles, in the tenant transaction.
  */
 @Injectable()

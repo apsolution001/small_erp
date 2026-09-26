@@ -116,7 +116,8 @@ describe('PermissionGuard', () => {
     );
   });
 
-  it('ignores non-HTTP contexts', () => {
-    expect(guardWith(undefined).canActivate(contextFor('bare', 'rpc'))).toBe(true);
+  it('denies non-HTTP contexts, even for a public handler', () => {
+    expect(guardWith(undefined).canActivate(contextFor('bare', 'rpc'))).toBe(false);
+    expect(guardWith(undefined).canActivate(contextFor('open', 'ws'))).toBe(false);
   });
 });

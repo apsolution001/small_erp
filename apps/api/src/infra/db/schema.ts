@@ -5,6 +5,7 @@
 export * from '../../modules/platform/tenants/tenants.schema.js';
 export * from '../../modules/auth/users/users.schema.js';
 export * from '../../modules/auth/users/tenant-users.view.js';
+export * from '../../modules/auth/sessions/sessions.schema.js';
 export * from '../../modules/auth/sessions/refresh-tokens.schema.js';
 export * from '../../modules/access/roles/roles.schema.js';
 export * from '../../modules/access/memberships/memberships.schema.js';

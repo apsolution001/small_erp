@@ -1,8 +1,8 @@
--- T-105 security for users, invitations, roles and the audit log (ADR 0008, ADR 0011, ADR 0016).
+-- T-105 security for users, invitations, roles and the audit log (ADR 0008, ADR 0011, ADR 0017).
 -- Runs as ekaro_owner.
 
 ------------------------------------------------------------------------------------------------
--- 1. Audit rows always carry the audited row's key (ADR 0016 §3).
+-- 1. Audit rows always carry the audited row's key (ADR 0017 §4).
 -- audit_row_change() takes the key column as an optional trigger argument (default `id`), so a
 -- table keyed otherwise names its key: company_profile is keyed by tenant_id, and a
 -- membership_branches row is a fact about its membership (row_id = membership_id).
@@ -143,7 +143,7 @@ create policy tenant_isolation on outbox
 grant insert on outbox to ekaro_app;
 
 ------------------------------------------------------------------------------------------------
--- 4. The user directory for tenant code (ADR 0016 §1). users stays a platform table; ekaro_app
+-- 4. The user directory for tenant code (ADR 0017 §1). users stays a platform table; ekaro_app
 -- may read five columns of the users who hold a membership in the tenant in context, and nothing
 -- else: no password hash, TOTP secret, lockout state, and no user of any other tenant.
 ------------------------------------------------------------------------------------------------

@@ -159,15 +159,18 @@ describe('tenant isolation of the tenant tables on a raw ekaro_app connection', 
     ).rejects.toThrow(/violates foreign key constraint "godowns_branch_fk"/);
   });
 
-  it('keeps refresh tokens, and every private column of users, out of reach of ekaro_app', async () => {
-    await expect(
-      withTenantConnection(a.body.tenant.id, (c) => c.query('select count(*) from refresh_tokens')),
-    ).rejects.toThrow(PERMISSION_DENIED);
+  it('keeps sessions, refresh tokens and every private column of users out of reach of ekaro_app', async () => {
+    for (const table of ['sessions', 'refresh_tokens']) {
+      await expect(
+        withTenantConnection(a.body.tenant.id, (c) => c.query(`select count(*) from ${table}`)),
+        table,
+      ).rejects.toThrow(PERMISSION_DENIED);
+    }
     for (const query of [
       'select * from users',
       'select password_hash from users',
       'select totp_secret_enc from users',
-      'select failed_login_count, locked_until from users',
+      'select email_verified_at, last_login_at from users',
     ]) {
       await expect(
         withTenantConnection(a.body.tenant.id, (c) => c.query(query)),
@@ -186,7 +189,7 @@ describe('tenant isolation of the tenant tables on a raw ekaro_app connection', 
     }
   });
 
-  it("shows ekaro_app exactly the tenant's own members in the user directory (ADR 0016)", async () => {
+  it("shows ekaro_app exactly the tenant's own members in the user directory (ADR 0017)", async () => {
     const directory = (tenantId: string | null) =>
       withAppConnection({ tenantId }, async (c) =>
         (
@@ -272,14 +275,27 @@ describe('tenant isolation of the tenant tables on a raw ekaro_app connection', 
       ),
     );
     expect(memberships.rows).toEqual([{ n: 2 }]);
-    const units = await platform.execute<{ n: number }>(
-      sql.raw(`select count(*)::int as n from units where tenant_id in ${ids}`),
+    // branches: SELECT for the bootstrap's read-back, limited by RLS to the tenant in context.
+    const branches = await platform.execute<{ n: number }>(
+      sql.raw(`select count(*)::int as n from branches where tenant_id in ${ids}`),
     );
-    expect(units.rows).toEqual([{ n: 0 }]);
+    expect(branches.rows).toEqual([{ n: 0 }]);
     await expect(
-      platform.execute(sql.raw(`delete from units where tenant_id in ${ids}`)),
+      platform.execute(sql.raw(`delete from branches where tenant_id in ${ids}`)),
     ).rejects.toMatchObject({
       cause: { message: expect.stringMatching(PERMISSION_DENIED) as string },
     });
+  });
+
+  it('gives ekaro_platform no read access to the masters the bootstrap only inserts', async () => {
+    const platform = testPlatformDb();
+    for (const table of ['godowns', 'units', 'tax_rates', 'document_series']) {
+      await expect(
+        platform.execute(sql.raw(`select count(*) from ${table}`)),
+        table,
+      ).rejects.toMatchObject({
+        cause: { message: expect.stringMatching(PERMISSION_DENIED) as string },
+      });
+    }
   });
 });

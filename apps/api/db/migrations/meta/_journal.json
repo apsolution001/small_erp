@@ -40,15 +40,29 @@
     {
       "idx": 5,
       "version": "7",
-      "when": 1790404478023,
-      "tag": "0005_t105_invitations_outbox",
+      "when": 1790404842880,
+      "tag": "0005_sec_sessions_lockout",
       "breakpoints": true
     },
     {
       "idx": 6,
       "version": "7",
-      "when": 1790404498147,
-      "tag": "0006_t105_users_roles_audit_security",
+      "when": 1790404878211,
+      "tag": "0006_sec_sessions_lockout_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790406587225,
+      "tag": "0007_t105_invitations_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790406588574,
+      "tag": "0008_t105_users_roles_audit_security",
       "breakpoints": true
     }
   ]

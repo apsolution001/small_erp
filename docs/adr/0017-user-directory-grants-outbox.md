@@ -1,4 +1,4 @@
-# 0016 — User directory for tenant code, granting authority, audit row keys and the outbox table
+# 0017 — User directory for tenant code, granting authority, audit row keys and the outbox table
 
 **Status:** Accepted · 2026-09-26 · refines ADR 0007, 0008, 0011 and 0015 (T-105)
 

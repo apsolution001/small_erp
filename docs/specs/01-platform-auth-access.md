@@ -29,10 +29,13 @@ BRD refs: MS-01, §8 (roles), §10 (security), PL-04. ADRs: 0003, 0006, 0007, 00
 | email_verified_at                     | timestamptz null |                                                                |
 | totp_secret_enc                       | text null        | AES-256-GCM with key from env                                  |
 | status                                | text             | `active \| disabled`                                           |
-| failed_login_count, locked_until      | int, timestamptz | progressive lockout: 5 fails → 15 min                          |
 | last_login_at, created_at, updated_at | timestamptz      |                                                                |
 
-**refresh_tokens**: id, user_id, membership_id, family_id, token_hash (sha256, unique), expires_at, revoked_at, revoked_reason, replaced_by_id, ip, user_agent, created_at.
+Progressive lockout (5 failures → 15 minutes) is kept in Redis per email, not on `users`, so unknown emails lock the same way (ADR 0016).
+
+**sessions**: id (= the refresh-token family and the access token's `sid`), user_id, membership_id (→ memberships (id, user_id)), created_at, absolute_expires_at (login + 30 days), revoked_at, revoked_reason.
+
+**refresh_tokens**: id, family_id (→ sessions), token_hash (sha256, unique), expires_at (issue + 7 days, capped at the session's absolute end), revoked_at, revoked_reason, replaced_by_id (→ refresh_tokens), ip, user_agent, created_at.
 
 ### Tenant tables (RLS)
 
@@ -100,7 +103,7 @@ Later sprints extend the catalogue (inventory._, purchase._, sales._, production
 
 - `POST /auth/login {email, password, tenantId?}`. On success: if the user has 1 active membership, log into it. If there are more and no `tenantId` was given, return `{ requiresTenantSelection: true, tenants: [...] , selectionToken }` (5-minute signed token), then `POST /auth/select-tenant`.
 - `POST /auth/refresh` (cookie) rotates the token. Reuse of a revoked token revokes the family and returns 401 `REFRESH_REUSED`.
-- `POST /auth/logout` revokes the family and clears the cookie. `POST /auth/switch-tenant {tenantId}` issues new tokens for another membership.
+- `POST /auth/logout` revokes the family and clears the cookie. `POST /auth/switch-tenant {tenantId}` issues new tokens for another membership; it needs the access token and the refresh cookie of the same live session, and replaces that session (ADR 0016).
 - `GET /auth/me` returns user, active tenant, membership, role, effective permissions and branch scope.
 - Failed login: the generic 401 `INVALID_CREDENTIALS`, with lockout after 5 failures (423 `ACCOUNT_LOCKED`).
 
@@ -108,8 +111,8 @@ Later sprints extend the catalogue (inventory._, purchase._, sales._, production
 
 - `GET/POST /users`: POST sends an invitation (email via outbox with a token link). If the email already exists as a user, they get a membership on acceptance. Inviting an email with an open invitation replaces it. `GET /users/:membershipId` reads one.
 - `GET /invitations?status=&q=&sort=` (`access.user:view`) and `DELETE /invitations/:id` (revoke, `access.user:delete`). An invitation is `pending`, `expired` (derived), `accepted` or `revoked`.
-- `POST /auth/invitations/preview {token}` and `POST /auth/accept-invitation {token, fullName?, password?}` (public). A new email sends a name and password; an existing user sends the token only. Acceptance starts no session (T-105, ADR 0016).
-- `PATCH /users/:membershipId {roleId, allBranches, branchIds, status, version}`. Rules: you cannot change your own role, you cannot disable the last active Owner, and only an Owner can assign the Owner role. T-105 adds: you cannot disable yourself, only an Owner changes an Owner's membership, and nobody assigns a role with permissions they do not hold (ADR 0016).
+- `POST /auth/invitations/preview {token}` and `POST /auth/accept-invitation {token, fullName?, password?}` (public). A new email sends a name and password; an existing user sends the token only. Acceptance starts no session (T-105, ADR 0017).
+- `PATCH /users/:membershipId {roleId, allBranches, branchIds, status, version}`. Rules: you cannot change your own role, you cannot disable the last active Owner, and only an Owner can assign the Owner role. T-105 adds: you cannot disable yourself, only an Owner changes an Owner's membership, and nobody assigns a role with permissions they do not hold (ADR 0017).
 - `GET/POST/PATCH/DELETE /roles`: system roles cannot be deleted, a role in use cannot be deleted (409 `ROLE_IN_USE`), and `POST /roles/:id/clone` clones one. The Owner role's permissions and billing flag cannot be edited. A free (non-billable) role may only view and export (BRD §12).
 - The minimum-2-billable-users billing rule (BRD §12) is a billing concern and is not enforced at membership level.
 

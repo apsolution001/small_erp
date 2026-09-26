@@ -67,9 +67,9 @@ describe('migrations on an empty database', () => {
       `select count(*)::int as n from pg_class
         where relnamespace = 'public'::regnamespace and relkind in ('r', 'p') and not relispartition`,
     );
-    // tenants, audit_log, users, refresh_tokens, the nine T-104 tenant tables, and T-105's
-    // invitations and outbox.
-    expect(tables).toEqual([{ n: 15 }]);
+    // tenants, audit_log, users, sessions, refresh_tokens, the nine T-104 tenant tables, and
+    // T-105's invitations and outbox.
+    expect(tables).toEqual([{ n: 16 }]);
   });
 
   it('creates audit partitions for the current month and 12 months ahead', async () => {
