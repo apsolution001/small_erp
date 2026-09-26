@@ -50,18 +50,25 @@ describe('migrations on an empty database', () => {
     ).toEqual([{ n: journal.entries.length }]);
   });
 
-  it('leaves every object owned by ekaro_owner, with RLS forced on tenants and audit_log', async () => {
+  it('leaves every object owned by ekaro_owner, with RLS forced on every table', async () => {
     const owners = await query<{ owner: string }>(
       `select distinct pg_get_userbyid(relowner) as owner from pg_class
         where relnamespace = 'public'::regnamespace and relkind in ('r', 'p', 'i', 'I', 'S', 'v')`,
     );
     expect(owners).toEqual([{ owner: 'ekaro_owner' }]);
-    const forced = await query<{ relname: string }>(
+    const unprotected = await query<{ relname: string }>(
       `select relname from pg_class
-        where relname in ('tenants', 'audit_log') and relrowsecurity and relforcerowsecurity
+        where relnamespace = 'public'::regnamespace and relkind in ('r', 'p')
+          and not relispartition and not (relrowsecurity and relforcerowsecurity)
         order by relname`,
     );
-    expect(forced.map((r) => r.relname)).toEqual(['audit_log', 'tenants']);
+    expect(unprotected).toEqual([]);
+    const tables = await query<{ n: number }>(
+      `select count(*)::int as n from pg_class
+        where relnamespace = 'public'::regnamespace and relkind in ('r', 'p') and not relispartition`,
+    );
+    // tenants, audit_log, users, refresh_tokens and the nine T-104 tenant tables.
+    expect(tables).toEqual([{ n: 13 }]);
   });
 
   it('creates audit partitions for the current month and 12 months ahead', async () => {
