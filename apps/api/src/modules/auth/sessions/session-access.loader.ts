@@ -17,20 +17,20 @@ export class SessionAccessLoader {
     private readonly tenants: TenantsService,
   ) {}
 
-  /** For every authenticated request: from the 60-second cache, else loaded and cached. */
-  async cached(tenantId: string, membershipId: string): Promise<AccessSnapshot | undefined> {
-    const hit = await this.cache.get(tenantId, membershipId);
-    if (hit !== undefined) return hit;
-    const loaded = await this.load(membershipId);
-    if (loaded !== undefined) await this.cache.set(loaded);
-    return loaded;
+  /**
+   * For every authenticated request: from the 60-second cache, else loaded and cached (unless the
+   * tenant was invalidated during the load, see `AccessCache`).
+   */
+  cached(tenantId: string, membershipId: string): Promise<AccessSnapshot | undefined> {
+    return this.cache.getOrLoad(tenantId, membershipId, () => this.load(membershipId));
   }
 
-  /** Fresh from the database (login, refresh, switch), and refreshes the cache entry. */
-  async fresh(membershipId: string): Promise<AccessSnapshot | undefined> {
-    const loaded = await this.load(membershipId);
-    if (loaded !== undefined) await this.cache.set(loaded);
-    return loaded;
+  /**
+   * Fresh from the database (login, refresh, switch). Not written to the cache: without the
+   * tenant known before the load, the generation check could not protect the write.
+   */
+  fresh(membershipId: string): Promise<AccessSnapshot | undefined> {
+    return this.load(membershipId);
   }
 
   private async load(membershipId: string): Promise<AccessSnapshot | undefined> {

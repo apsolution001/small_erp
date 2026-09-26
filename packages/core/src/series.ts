@@ -128,9 +128,14 @@ function isRenderedDigits(digits: string, padding: number): boolean {
 
 /** Each position of a number `length` characters wide: a fixed character, or null for a digit. */
 function layoutOf(series: SeriesFormat, length: number): (string | null)[] | undefined {
-  const digits = length - series.prefix.length - series.suffix.length;
+  const { prefix, suffix } = series;
+  const digits = length - prefix.length - suffix.length;
   if (digits < series.padding) return undefined;
-  return [...series.prefix, ...Array<null>(digits).fill(null), ...series.suffix];
+  const digitsEnd = prefix.length + digits;
+  return Array.from({ length }, (_, i) => {
+    if (i < prefix.length) return prefix.charAt(i);
+    return i < digitsEnd ? null : suffix.charAt(i - digitsEnd);
+  });
 }
 
 function collideAtLength(a: SeriesFormat, b: SeriesFormat, length: number): boolean {

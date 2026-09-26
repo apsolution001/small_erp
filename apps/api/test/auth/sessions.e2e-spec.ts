@@ -5,11 +5,12 @@ import {
 } from '@ekaro/contracts';
 import { JwtService } from '@nestjs/jwt';
 import { type NestExpressApplication } from '@nestjs/platform-express';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AccessCache } from '../../src/modules/access/index.js';
 import { hashRefreshToken } from '../../src/modules/auth/sessions/refresh-token.js';
 import { refreshTokens } from '../../src/modules/auth/sessions/refresh-tokens.schema.js';
+import { sessions } from '../../src/modules/auth/sessions/sessions.schema.js';
 import { addMembership, createTestUser, setUserStatus, TEST_PASSWORD } from '../factories/users.js';
 import { createTestApp, http } from '../support/app.js';
 import {
@@ -17,6 +18,7 @@ import {
   cookieHeader,
   logIn,
   me,
+  REFRESH_COOKIE,
   refreshSetCookie,
   refreshTokenOf,
   type SignedUp,
@@ -26,6 +28,36 @@ import { loadTestEnv } from '../support/test-env.js';
 import { testPlatformDb, withTenantConnection } from '../support/db.js';
 
 const problem = (body: unknown) => problemSchema.parse(body);
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** The Set-Cookie line that clears the refresh cookie. */
+const CLEARED = new RegExp(`^${REFRESH_COOKIE}=;`);
+
+async function familyIdOf(refreshToken: string): Promise<string> {
+  const [row] = await testPlatformDb()
+    .select({ familyId: refreshTokens.familyId })
+    .from(refreshTokens)
+    .where(eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)));
+  if (row === undefined) throw new Error('no such refresh token');
+  return row.familyId;
+}
+
+async function sessionOf(refreshToken: string) {
+  const [session] = await testPlatformDb()
+    .select()
+    .from(sessions)
+    .where(eq(sessions.id, await familyIdOf(refreshToken)));
+  if (session === undefined) throw new Error('no session');
+  return session;
+}
+
+/** Tokens of the session that could still be refreshed. */
+async function liveTokens(familyId: string): Promise<number> {
+  const rows = await testPlatformDb()
+    .select({ id: refreshTokens.id })
+    .from(refreshTokens)
+    .where(and(eq(refreshTokens.familyId, familyId), isNull(refreshTokens.revokedAt)));
+  return rows.length;
+}
 
 async function familyOf(refreshToken: string) {
   const db = testPlatformDb();
@@ -118,6 +150,14 @@ describe('auth sessions', () => {
       expect(body.tenant.id).toBe(ownerB.body.tenant.id);
       expect(body.membership.role.name).toBe('Viewer');
       expect(refreshTokenOf(selected)).toMatch(/^[\w-]{43}$/);
+
+      // A selection token is single-use: a replay cannot start a second session.
+      const replay = await http(app)
+        .post('/api/v1/auth/select-tenant')
+        .send({ selectionToken: selection.selectionToken, tenantId: ownerA.body.tenant.id })
+        .expect(401);
+      expect(problem(replay.body).code).toBe('TOKEN_INVALID');
+      expect(refreshSetCookie(replay)).toBeUndefined();
     });
 
     it('logs into the requested company directly when tenantId is given', async () => {
@@ -181,7 +221,7 @@ describe('auth sessions', () => {
         .set('Cookie', cookieHeader(first.refreshToken))
         .expect(401);
       expect(problem(replay.body).code).toBe('REFRESH_REUSED');
-      expect(refreshSetCookie(replay)).toMatch(/^ekaro_refresh=;/);
+      expect(refreshSetCookie(replay)).toMatch(CLEARED);
 
       const legit = await http(app)
         .post('/api/v1/auth/refresh')
@@ -215,6 +255,60 @@ describe('auth sessions', () => {
         .expect(401);
       expect(problem(expired.body).code).toBe('TOKEN_EXPIRED');
     });
+
+    it('expires a refresh token after 7 idle days, never after the 30-day absolute end', async () => {
+      const { refreshToken } = await logIn(app, ownerA.email, ownerA.password);
+      const session = await sessionOf(refreshToken);
+      const sinceLogin = session.absoluteExpiresAt.getTime() - session.createdAt.getTime();
+      expect(sinceLogin).toBe(30 * DAY_MS);
+      const [token] = await testPlatformDb()
+        .select({ expiresAt: refreshTokens.expiresAt })
+        .from(refreshTokens)
+        .where(eq(refreshTokens.tokenHash, hashRefreshToken(refreshToken)));
+      expect(Math.round(((token?.expiresAt.getTime() ?? 0) - Date.now()) / DAY_MS)).toBe(7);
+
+      // A day before the absolute end, rotation caps the new token (and cookie) at that end.
+      const end = new Date(Date.now() + DAY_MS);
+      await testPlatformDb()
+        .update(sessions)
+        .set({ absoluteExpiresAt: end })
+        .where(eq(sessions.id, session.id));
+      const res = await http(app)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookieHeader(refreshToken))
+        .expect(200);
+      expect(refreshSetCookie(res)).toContain(`Expires=${end.toUTCString()}`);
+
+      // Past the absolute end, even a live token is refused.
+      await testPlatformDb()
+        .update(sessions)
+        .set({
+          createdAt: new Date(Date.now() - 2 * DAY_MS),
+          absoluteExpiresAt: new Date(Date.now() - 1000),
+        })
+        .where(eq(sessions.id, session.id));
+      const expired = await http(app)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookieHeader(refreshTokenOf(res)))
+        .expect(401);
+      expect(problem(expired.body).code).toBe('TOKEN_EXPIRED');
+      expect(refreshSetCookie(expired)).toMatch(CLEARED);
+    });
+
+    it('never leaves a live token when logout races a refresh of the same session', async () => {
+      for (let round = 0; round < 10; round++) {
+        const { refreshToken } = await logIn(app, ownerA.email, ownerA.password);
+        const familyId = await familyIdOf(refreshToken);
+        const [refreshed, loggedOut] = await Promise.all([
+          http(app).post('/api/v1/auth/refresh').set('Cookie', cookieHeader(refreshToken)),
+          http(app).post('/api/v1/auth/logout').set('Cookie', cookieHeader(refreshToken)),
+        ]);
+        expect(loggedOut.status).toBe(204);
+        expect([200, 401]).toContain(refreshed.status);
+        expect(await liveTokens(familyId)).toBe(0);
+        expect((await sessionOf(refreshToken)).revokedReason).toBe('logout');
+      }
+    });
   });
 
   describe('logout', () => {
@@ -224,10 +318,11 @@ describe('auth sessions', () => {
         .post('/api/v1/auth/logout')
         .set('Cookie', cookieHeader(refreshToken))
         .expect(204);
-      expect(refreshSetCookie(res)).toMatch(
-        /^ekaro_refresh=; Path=\/api\/v1\/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict$/,
+      expect(refreshSetCookie(res)).toBe(
+        `${REFRESH_COOKIE}=; Path=/api/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict`,
       );
       expect((await familyOf(refreshToken)).map((t) => t.revokedReason)).toEqual(['logout']);
+      expect((await sessionOf(refreshToken)).revokedReason).toBe('logout');
       await http(app)
         .post('/api/v1/auth/refresh')
         .set('Cookie', cookieHeader(refreshToken))
@@ -240,13 +335,18 @@ describe('auth sessions', () => {
   });
 
   describe('switch-tenant', () => {
+    const switchTo = (tenantId: string, accessToken?: string, refreshToken?: string) => {
+      let req = http(app).post('/api/v1/auth/switch-tenant');
+      if (accessToken !== undefined) req = req.set('Authorization', bearer(accessToken));
+      if (refreshToken !== undefined) req = req.set('Cookie', cookieHeader(refreshToken));
+      return req.send({ tenantId });
+    };
+
     it('moves the session to another company and ends the old session', async () => {
       const inA = await logIn(app, consultant.email, TEST_PASSWORD, ownerA.body.tenant.id);
-      const res = await http(app)
-        .post('/api/v1/auth/switch-tenant')
-        .set('Authorization', bearer(inA.body.accessToken))
-        .send({ tenantId: ownerB.body.tenant.id })
-        .expect(200);
+      const oldSession = await sessionOf(inA.refreshToken);
+      const res = await switchTo(ownerB.body.tenant.id, inA.body.accessToken, inA.refreshToken);
+      expect(res.status).toBe(200);
       const inB = tokenResponseSchema.parse(res.body);
       expect(inB.tenant.id).toBe(ownerB.body.tenant.id);
       expect(inB.membership.role.name).toBe('Viewer');
@@ -255,20 +355,82 @@ describe('auth sessions', () => {
       expect(session.permissions).not.toContain('audit.log:view');
 
       expect((await familyOf(inA.refreshToken)).map((t) => t.revokedReason)).toEqual(['switched']);
-      expect((await familyOf(refreshTokenOf(res))).map((t) => t.revokedReason)).toEqual([null]);
+      expect((await sessionOf(inA.refreshToken)).revokedReason).toBe('switched');
+      const newSession = await sessionOf(refreshTokenOf(res));
+      expect(newSession).toMatchObject({ revokedAt: null, membershipId: inB.membership.id });
+      // Switching never extends the login: the new session keeps the old absolute end.
+      expect(newSession.absoluteExpiresAt).toEqual(oldSession.absoluteExpiresAt);
     });
 
-    it('403 for a company the user does not belong to; 401 without a session', async () => {
-      const denied = await http(app)
-        .post('/api/v1/auth/switch-tenant')
-        .set('Authorization', bearer(ownerA.body.accessToken))
-        .send({ tenantId: ownerB.body.tenant.id })
-        .expect(403);
-      expect(problem(denied.body).code).toBe('FORBIDDEN');
+    it('401 without the refresh cookie, and the session stays usable', async () => {
+      const inA = await logIn(app, consultant.email, TEST_PASSWORD, ownerA.body.tenant.id);
+      const res = await switchTo(ownerB.body.tenant.id, inA.body.accessToken).expect(401);
+      expect(problem(res.body).code).toBe('UNAUTHENTICATED');
+      expect(refreshSetCookie(res)).toMatch(CLEARED);
+      expect((await sessionOf(inA.refreshToken)).revokedAt).toBeNull();
+    });
+
+    it('401 after logout, although the access token is still valid', async () => {
+      const inA = await logIn(app, consultant.email, TEST_PASSWORD, ownerA.body.tenant.id);
       await http(app)
-        .post('/api/v1/auth/switch-tenant')
-        .send({ tenantId: ownerB.body.tenant.id })
+        .post('/api/v1/auth/logout')
+        .set('Cookie', cookieHeader(inA.refreshToken))
+        .expect(204);
+      await me(app, inA.body.accessToken);
+
+      const res = await switchTo(ownerB.body.tenant.id, inA.body.accessToken, inA.refreshToken);
+      expect(res.status).toBe(401);
+      expect(problem(res.body).code).toBe('REFRESH_REUSED');
+      expect(refreshSetCookie(res)).toMatch(CLEARED);
+      expect(await liveTokens(await familyIdOf(inA.refreshToken))).toBe(0);
+    });
+
+    it('401 after reuse detection ended the session', async () => {
+      const inA = await logIn(app, consultant.email, TEST_PASSWORD, ownerA.body.tenant.id);
+      const rotated = await http(app)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookieHeader(inA.refreshToken))
+        .expect(200);
+      await http(app)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookieHeader(inA.refreshToken))
         .expect(401);
+
+      const res = await switchTo(
+        ownerB.body.tenant.id,
+        inA.body.accessToken,
+        refreshTokenOf(rotated),
+      );
+      expect(res.status).toBe(401);
+      expect(problem(res.body).code).toBe('REFRESH_REUSED');
+      expect(refreshSetCookie(res)).toMatch(CLEARED);
+      expect((await sessionOf(inA.refreshToken)).revokedReason).toBe('reuse_detected');
+      expect(await liveTokens(await familyIdOf(inA.refreshToken))).toBe(0);
+    });
+
+    it('401 when the cookie belongs to another session, which is left alone', async () => {
+      const first = await logIn(app, consultant.email, TEST_PASSWORD, ownerA.body.tenant.id);
+      const second = await logIn(app, consultant.email, TEST_PASSWORD, ownerA.body.tenant.id);
+      const res = await switchTo(
+        ownerB.body.tenant.id,
+        first.body.accessToken,
+        second.refreshToken,
+      ).expect(401);
+      expect(problem(res.body).code).toBe('TOKEN_INVALID');
+      expect((await sessionOf(first.refreshToken)).revokedAt).toBeNull();
+      expect((await sessionOf(second.refreshToken)).revokedAt).toBeNull();
+    });
+
+    it('403 for a company the user does not belong to, keeping the session; 401 without a session', async () => {
+      const denied = await switchTo(
+        ownerB.body.tenant.id,
+        ownerA.body.accessToken,
+        ownerA.refreshToken,
+      ).expect(403);
+      expect(problem(denied.body).code).toBe('FORBIDDEN');
+      expect(refreshSetCookie(denied)).toBeUndefined();
+      expect((await sessionOf(ownerA.refreshToken)).revokedAt).toBeNull();
+      await switchTo(ownerB.body.tenant.id).expect(401);
     });
   });
 

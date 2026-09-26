@@ -1,6 +1,7 @@
 import { type ArgumentsHost, HttpException, Logger, NotFoundException } from '@nestjs/common';
 import { problemSchema } from '@ekaro/contracts';
 import { ThrottlerException } from '@nestjs/throttler';
+import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
@@ -216,7 +217,29 @@ describe('ProblemDetailsFilter', () => {
     new ProblemDetailsFilter().catch(boom, host);
     expect(captured.status).toBe(500);
     expect(JSON.stringify(captured.body)).not.toContain('boom');
-    expect(logError).toHaveBeenCalledWith({ err: boom }, 'Unhandled error');
+    expect(logError).toHaveBeenCalledWith(
+      { err: { type: 'Error', message: 'boom', stack: boom.stack } },
+      'Unhandled error',
+    );
+  });
+
+  it('logs a failed query as its SQLSTATE and constraint only, never its SQL or parameters', () => {
+    const logError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const driver = Object.assign(new Error('value too long for type character varying(10)'), {
+      severity: 'ERROR',
+      code: '22001',
+      table: 'users',
+      column: 'mobile',
+      detail: 'Failing row contains (asha@example.com).',
+    });
+    const failed = new DrizzleQueryError('update users set mobile = $1', ['+91 secret'], driver);
+    const { host, captured } = httpHost();
+    new ProblemDetailsFilter().catch(failed, host);
+    expect(captured.status).toBe(500);
+    expect(logError).toHaveBeenCalledWith(
+      { err: { type: 'DrizzleQueryError', sqlstate: '22001', table: 'users', column: 'mobile' } },
+      'Unhandled error',
+    );
   });
 
   it('does not write when headers were already sent', () => {

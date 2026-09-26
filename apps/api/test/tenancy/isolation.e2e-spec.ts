@@ -27,6 +27,7 @@ const TENANT_TABLES = [
 /** Business-rule triggers some tables carry besides the audit trigger (T-106, T-107). */
 const GUARD_TRIGGERS: Partial<Record<(typeof TENANT_TABLES)[number], string[]>> = {
   tax_rates: ['tax_rates_rates_immutable'],
+  document_series: ['document_series_numbering_guard'],
 };
 
 const RLS_VIOLATION = /new row violates row-level security policy/;
@@ -141,8 +142,8 @@ describe('tenant isolation of the T-104 tables on a raw ekaro_app connection', (
     ).rejects.toThrow(/violates foreign key constraint "godowns_branch_fk"/);
   });
 
-  it('keeps users and refresh tokens out of reach of ekaro_app', async () => {
-    for (const table of ['users', 'refresh_tokens']) {
+  it('keeps users, sessions and refresh tokens out of reach of ekaro_app', async () => {
+    for (const table of ['users', 'sessions', 'refresh_tokens']) {
       await expect(
         withTenantConnection(a.body.tenant.id, (c) => c.query(`select count(*) from ${table}`)),
       ).rejects.toThrow(PERMISSION_DENIED);
@@ -158,14 +159,27 @@ describe('tenant isolation of the T-104 tables on a raw ekaro_app connection', (
       ),
     );
     expect(memberships.rows).toEqual([{ n: 2 }]);
-    const units = await platform.execute<{ n: number }>(
-      sql.raw(`select count(*)::int as n from units where tenant_id in ${ids}`),
+    // branches: SELECT for the bootstrap's read-back, limited by RLS to the tenant in context.
+    const branches = await platform.execute<{ n: number }>(
+      sql.raw(`select count(*)::int as n from branches where tenant_id in ${ids}`),
     );
-    expect(units.rows).toEqual([{ n: 0 }]);
+    expect(branches.rows).toEqual([{ n: 0 }]);
     await expect(
-      platform.execute(sql.raw(`delete from units where tenant_id in ${ids}`)),
+      platform.execute(sql.raw(`delete from branches where tenant_id in ${ids}`)),
     ).rejects.toMatchObject({
       cause: { message: expect.stringMatching(PERMISSION_DENIED) as string },
     });
+  });
+
+  it('gives ekaro_platform no read access to the masters the bootstrap only inserts', async () => {
+    const platform = testPlatformDb();
+    for (const table of ['godowns', 'units', 'tax_rates', 'document_series']) {
+      await expect(
+        platform.execute(sql.raw(`select count(*) from ${table}`)),
+        table,
+      ).rejects.toMatchObject({
+        cause: { message: expect.stringMatching(PERMISSION_DENIED) as string },
+      });
+    }
   });
 });

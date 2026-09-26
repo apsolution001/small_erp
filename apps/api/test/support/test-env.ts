@@ -40,6 +40,8 @@ export function loadTestEnv(): TestEnv {
     THROTTLE_AUTH_PER_MINUTE: UNTHROTTLED,
     THROTTLE_ACCOUNT_PER_MINUTE: UNTHROTTLED,
     THROTTLE_GSTIN_PER_MINUTE: UNTHROTTLED,
+    // As deployed: a Secure `__Secure-` cookie (supertest sends it over http regardless).
+    REFRESH_COOKIE_SECURE: 'true',
     DATABASE_URL_OWNER: onDatabase(raw.DATABASE_URL_OWNER, database),
     DATABASE_URL_APP: onDatabase(raw.DATABASE_URL_APP, database),
     DATABASE_URL_PLATFORM: onDatabase(raw.DATABASE_URL_PLATFORM, database),

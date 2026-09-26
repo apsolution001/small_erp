@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 /**
- * What the masters need to know about stock postings (ADR 0016 §6): the valuation method and the
+ * What the masters need to know about stock postings (ADR 0017 §6): the valuation method and the
  * books-begin date are locked once any stock has been posted (spec 02 §2, accounting standard).
  * The posting engine (Sprint 2) owns that fact and binds its own implementation to
  * {@link STOCK_POSTINGS}.

@@ -1,6 +1,6 @@
 # 0015 — Sessions, access resolution and platform access to module tables
 
-**Status:** Accepted · 2026-09-26 · refines ADR 0003, 0006, 0007 and 0014 (T-104)
+**Status:** Accepted · 2026-09-26 · refines ADR 0003, 0006, 0007 and 0014 (T-104) · §4 and §5 amended by [ADR 0016](0016-session-hardening.md)
 
 ## Context
 
@@ -33,3 +33,8 @@ T-104 had to turn ADR 0006 (JWT + rotating refresh tokens) and ADR 0007 (permiss
 - A disabled user, membership or tenant can keep using an access token for at most 60 seconds, unless the change calls the invalidation hook. A refresh always sees the change at once.
 - Every role, membership, branch-scope or status change (T-105) must call the `AccessCache` hooks after its transaction commits.
 - Concurrent refreshes of one token end the session. The web (T-150) must serialise refreshes (one in-flight refresh shared by all callers).
+
+## Notes (security review, 2026-09-26)
+
+- **`ekaro_platform` can set its own tenant context.** `app.tenant_id` is an ordinary `set_config` setting, and nothing stops the platform connection from setting it to any tenant: `tenant_isolation` then lets it read and insert that tenant's rows in the tables it has grants on. That is what the signup bootstrap relies on (Decision 2), and it means the platform role is trusted with every tenant's data in those tables. Keep its grants minimal (ADR 0016 dropped SELECT on `godowns`, `units`, `tax_rates` and `document_series`), and keep the platform connection confined to `modules/platform` and `modules/auth` (lint boundary).
+- Session lifetimes, switch-tenant, the cookie name and the access-cache write rule in §4 and §5 are amended by [ADR 0016](0016-session-hardening.md).

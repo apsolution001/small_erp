@@ -14,9 +14,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   BusinessRuleError,
   ConflictError,
+  DomainError,
   ForbiddenError,
   LockedError,
-  ServiceUnavailableError,
   UnauthorizedError,
   ValidationError,
 } from '../../common/errors/domain-error.js';
@@ -30,6 +30,7 @@ import {
   GSP_PROVIDER,
   type GspProvider,
   isUsableTenant,
+  lookupGstinOrUnavailable,
   type Tenant,
   TenantBootstrapService,
   TenantsService,
@@ -37,15 +38,18 @@ import {
 } from '../platform/index.js';
 import { isCommonPassword } from './passwords/common-passwords.js';
 import { PasswordHasher } from './passwords/password-hasher.js';
+import { SecurityEventLog } from './security/security-events.js';
 import { SessionAccessLoader } from './sessions/session-access.loader.js';
 import { assertUsableSession } from './sessions/session-rules.js';
 import {
   type IssuedRefreshToken,
   type SessionMeta,
   SessionService,
+  type TokenRefusal,
 } from './sessions/session.service.js';
 import { AccessTokenService } from './tokens/access-token.service.js';
-import { isLocked } from './users/lockout.js';
+import { SelectionTokenLedger } from './tokens/selection-token-ledger.js';
+import { LoginLockout } from './users/login-lockout.js';
 import { type UserRow } from './users/users.schema.js';
 import { UsersRepository } from './users/users.repository.js';
 
@@ -83,6 +87,9 @@ export class AuthService {
     private readonly access: SessionAccessLoader,
     private readonly tenants: TenantsService,
     private readonly bootstrap: TenantBootstrapService,
+    private readonly lockout: LoginLockout,
+    private readonly selections: SelectionTokenLedger,
+    private readonly events: SecurityEventLog,
     private readonly clock: Clock,
   ) {}
 
@@ -98,7 +105,7 @@ export class AuthService {
     }
     if ((await this.users.findByEmail(input.email)) !== undefined) throw emailTaken();
 
-    const registration = await this.lookupGstin(input.gstin);
+    const registration = await lookupGstinOrUnavailable(this.gsp, input.gstin);
     if (registration.status !== 'Active') {
       throw new BusinessRuleError(
         'GSTIN_INACTIVE',
@@ -140,32 +147,47 @@ export class AuthService {
     return this.grant(created.user, created.membershipId, created.refresh);
   }
 
+  /**
+   * Password login. Lockout is per email (Redis), whether or not an account exists, and every
+   * path spends one bcrypt comparison, so neither the answer nor its timing tells an attacker
+   * which emails are registered. The 423 of a locked email (spec 01) is reached by an unknown
+   * email exactly like by a real one.
+   */
   async login(input: Login, meta: SessionMeta): Promise<LoginOutcome> {
+    if (await this.lockout.isLocked(input.email)) {
+      await this.hasher.verifyNothing(input.password);
+      this.events.record('auth.lockout', { email: input.email, ip: meta.ip, reason: 'refused' });
+      throw locked();
+    }
     const user = await this.users.findByEmail(input.email);
     const passwordHash = user?.passwordHash ?? null;
-    if (passwordHash === null || user === undefined) {
-      await this.hasher.verifyNothing(input.password);
-      throw new UnauthorizedError('INVALID_CREDENTIALS', INVALID_CREDENTIALS);
-    }
-    const now = this.clock.now();
-    if (isLocked(user, now)) throw new LockedError('ACCOUNT_LOCKED', LOCKED);
-
-    if (!(await this.hasher.verify(input.password, passwordHash))) {
-      const lockedUntil = await this.users.recordFailedLogin(user.id, now);
-      if (isLocked({ lockedUntil }, now)) throw new LockedError('ACCOUNT_LOCKED', LOCKED);
-      throw new UnauthorizedError('INVALID_CREDENTIALS', INVALID_CREDENTIALS);
+    const verified =
+      passwordHash === null
+        ? await this.hasher.verifyNothing(input.password)
+        : await this.hasher.verify(input.password, passwordHash);
+    if (!verified || user === undefined) {
+      return this.failedLogin(input.email, user?.id, meta);
     }
     if (user.status !== 'active') {
-      throw new UnauthorizedError('ACCOUNT_DISABLED', 'This account has been disabled.');
+      this.events.record('auth.disabled_account', { userId: user.id, ip: meta.ip });
+      throw accountDisabled();
     }
-    await this.users.recordSuccessfulLogin(user.id, now);
+    await this.lockout.reset(input.email);
+    await this.users.recordSuccessfulLogin(user.id, this.clock.now());
     return this.enter(user, input.tenantId, meta);
   }
 
   /** The second step of a login with several companies. */
   async selectTenant(input: SelectTenant, meta: SessionMeta): Promise<SessionGrant> {
-    const userId = await this.tokens.verifySelection(input.selectionToken);
-    const user = await this.activeUser(userId);
+    const selection = await this.tokens.verifySelection(input.selectionToken);
+    // Single use: consumed before anything else, so a replay can never start a second session.
+    if (!(await this.selections.consume(selection))) {
+      throw new UnauthorizedError(
+        'TOKEN_INVALID',
+        'This sign-in step was already used. Sign in again.',
+      );
+    }
+    const user = await this.activeUser(selection.userId, meta);
     const outcome = await this.enter(user, input.tenantId, meta);
     if (outcome.kind !== 'session') throw new Error('A chosen tenant always yields a session');
     return outcome.grant;
@@ -174,26 +196,21 @@ export class AuthService {
   /** Rotates the refresh token (reuse revokes the session) and issues a new access token. */
   async refresh(token: string, meta: SessionMeta): Promise<SessionGrant> {
     const rotation = await this.sessions.rotate(token, meta);
-    switch (rotation.kind) {
-      case 'unknown':
-        throw new UnauthorizedError('TOKEN_INVALID', 'Your session is not valid. Sign in again.');
-      case 'expired':
-        throw new UnauthorizedError('TOKEN_EXPIRED', 'Your session has expired. Sign in again.');
-      case 'reused':
-        throw new UnauthorizedError(
-          'REFRESH_REUSED',
-          'This session was used from somewhere else and has been ended. Sign in again.',
-        );
-      case 'rotated':
-        break;
-    }
+    if (rotation.kind !== 'rotated') throw this.refused(rotation, meta);
+    const familyId = rotation.issued.familyId;
     const user = await this.users.findById(rotation.userId);
     try {
       if (user === undefined) throw new Error(`Session of unknown user ${rotation.userId}`);
       return await this.grant(user, rotation.membershipId, rotation.issued);
     } catch (error) {
       // The user, membership or tenant lost access since login: end the session for good.
-      await this.sessions.revokeFamily(rotation.issued.familyId, 'access_revoked');
+      await this.sessions.revokeFamily(familyId, 'access_revoked');
+      this.events.record('auth.access_revoked', {
+        userId: rotation.userId,
+        familyId,
+        ip: meta.ip,
+        reason: error instanceof DomainError ? error.code : 'INTERNAL_ERROR',
+      });
       throw error;
     }
   }
@@ -203,21 +220,53 @@ export class AuthService {
     if (token !== undefined) await this.sessions.revokeByToken(token, 'logout');
   }
 
-  /** Moves the session to another of the user's companies: the old session ends. */
+  /**
+   * Moves the session to another of the user's companies. The refresh cookie must belong to the
+   * access token's session and be live: the old session is revoked and the new one issued in one
+   * transaction, so an access token that outlived its session (logout, reuse detection) cannot
+   * mint a new one. The target is checked first: a refused target leaves the session untouched.
+   */
   async switchTenant(
     principal: Principal,
     tenantId: string,
+    token: string,
     meta: SessionMeta,
   ): Promise<SessionGrant> {
-    const user = await this.activeUser(principal.userId);
-    const choice = await this.choiceFor(user.id, tenantId);
-    const grant = await this.startSession(user, choice.membershipId, meta);
-    await this.sessions.revokeFamily(principal.sessionId, 'switched');
-    return grant;
+    const denied = (reason: string): void => {
+      this.events.record('auth.switch_denied', {
+        userId: principal.userId,
+        familyId: principal.sessionId,
+        ip: meta.ip,
+        reason,
+      });
+    };
+    const user = await this.activeUser(principal.userId, meta);
+    const choice = await this.choiceFor(user.id, tenantId).catch((error: unknown) => {
+      denied('FORBIDDEN');
+      throw error;
+    });
+    const access = assertUsableSession(await this.access.fresh(choice.membershipId), {
+      userId: user.id,
+    });
+    const outcome = await this.sessions.switchTo(token, principal.sessionId, {
+      membershipId: choice.membershipId,
+      meta,
+    });
+    switch (outcome.kind) {
+      case 'switched':
+        return this.grantFor(user, access, outcome.issued);
+      case 'mismatch':
+        denied('mismatch');
+        throw sessionInvalid();
+      default:
+        denied(outcome.kind);
+        throw this.refused(outcome, meta);
+    }
   }
 
   async me(principal: Principal): Promise<MeResponse> {
-    const user = await this.activeUser(principal.userId);
+    const user = await this.users.findById(principal.userId);
+    if (user?.status !== 'active') throw accountDisabled();
     const tenant = await this.tenants.findById(this.db, principal.tenantId);
     if (tenant === undefined) throw new Error(`Session of unknown tenant ${principal.tenantId}`);
     return {
@@ -343,22 +392,43 @@ export class AuthService {
     return choice;
   }
 
-  private async lookupGstin(gstin: string) {
-    try {
-      return await this.gsp.lookupGstin(gstin);
-    } catch (error) {
-      throw new ServiceUnavailableError(
-        'SERVICE_UNAVAILABLE',
-        'The GST portal could not be reached. Try again in a few minutes.',
-        { cause: error },
-      );
+  /** Counts a failed login: 423 when it locks the email, else 401 INVALID_CREDENTIALS. */
+  private async failedLogin(
+    email: string,
+    userId: string | undefined,
+    meta: SessionMeta,
+  ): Promise<never> {
+    const nowLocked = await this.lockout.recordFailure(email);
+    const who = userId === undefined ? { email } : { userId };
+    this.events.record('auth.login_failed', { ...who, ip: meta.ip });
+    if (nowLocked) {
+      this.events.record('auth.lockout', { ...who, ip: meta.ip, reason: 'started' });
+      throw locked();
+    }
+    throw new UnauthorizedError('INVALID_CREDENTIALS', INVALID_CREDENTIALS);
+  }
+
+  /** The 401 for a refresh token that cannot be used; reuse is logged as a security event. */
+  private refused(refusal: TokenRefusal, meta: SessionMeta): UnauthorizedError {
+    switch (refusal.kind) {
+      case 'unknown':
+        return sessionInvalid();
+      case 'expired':
+        return new UnauthorizedError('TOKEN_EXPIRED', 'Your session has expired. Sign in again.');
+      case 'reused':
+        this.events.record('auth.refresh_reused', { familyId: refusal.familyId, ip: meta.ip });
+        return new UnauthorizedError(
+          'REFRESH_REUSED',
+          'This session was used from somewhere else and has been ended. Sign in again.',
+        );
     }
   }
 
-  private async activeUser(userId: string): Promise<UserRow> {
+  private async activeUser(userId: string, meta: SessionMeta): Promise<UserRow> {
     const user = await this.users.findById(userId);
     if (user?.status !== 'active') {
-      throw new UnauthorizedError('ACCOUNT_DISABLED', 'This account has been disabled.');
+      this.events.record('auth.disabled_account', { userId, ip: meta.ip });
+      throw accountDisabled();
     }
     return user;
   }
@@ -367,6 +437,18 @@ export class AuthService {
     const names = await findCompanyNames(this.db, [tenant.id]);
     return toTenantSummary(tenant, names.get(tenant.id) ?? tenant.slug);
   }
+}
+
+function locked(): LockedError {
+  return new LockedError('ACCOUNT_LOCKED', LOCKED);
+}
+
+function accountDisabled(): UnauthorizedError {
+  return new UnauthorizedError('ACCOUNT_DISABLED', 'This account has been disabled.');
+}
+
+function sessionInvalid(): UnauthorizedError {
+  return new UnauthorizedError('TOKEN_INVALID', 'Your session is not valid. Sign in again.');
 }
 
 function emailTaken(cause?: unknown): ConflictError {

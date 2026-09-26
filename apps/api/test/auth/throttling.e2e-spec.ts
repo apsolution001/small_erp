@@ -67,6 +67,33 @@ describe('rate limits on the public auth surface (Redis store)', () => {
     );
   });
 
+  it('counts IPv6 clients per /64, and IPv4-mapped clients as their IPv4 address', async () => {
+    const prefix = `2001:db8:${randomInt(65536).toString(16)}:${randomInt(65536).toString(16)}`;
+    const gstin = activeGstin();
+    for (let i = 1; i <= 3; i++) {
+      await http(app)
+        .get(`/api/v1/platform/gstin/${gstin}`)
+        .set('X-Forwarded-For', `${prefix}::${i}`)
+        .expect(200);
+    }
+    expectRateLimited(
+      await http(app)
+        .get(`/api/v1/platform/gstin/${gstin}`)
+        .set('X-Forwarded-For', `${prefix}:ffff:ffff:ffff:ffff`),
+    );
+
+    const ip = randomIp();
+    for (let i = 0; i < 3; i++) {
+      await http(app)
+        .get(`/api/v1/platform/gstin/${gstin}`)
+        .set('X-Forwarded-For', i % 2 === 0 ? ip : `::ffff:${ip}`)
+        .expect(200);
+    }
+    expectRateLimited(
+      await http(app).get(`/api/v1/platform/gstin/${gstin}`).set('X-Forwarded-For', `::ffff:${ip}`),
+    );
+  });
+
   it('limits login attempts per email address across IPs', async () => {
     const email = uniqueEmail('target');
     for (let i = 0; i < 2; i++) {

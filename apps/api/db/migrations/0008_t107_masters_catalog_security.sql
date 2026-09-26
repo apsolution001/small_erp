@@ -1,4 +1,4 @@
--- T-107 security and guards for the catalog tables of migration 0005 (spec 02, ADR 0003).
+-- T-107 security and guards for the catalog tables of migration 0007 (spec 02, ADR 0003).
 -- Runs as ekaro_owner.
 
 ------------------------------------------------------------------------------------------------

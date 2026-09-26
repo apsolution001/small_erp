@@ -101,10 +101,8 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<TokenResponse> {
-    const token = readRefreshCookie(req);
-    if (token === undefined) {
-      throw new UnauthorizedError('UNAUTHENTICATED', 'Sign in to continue.');
-    }
+    const token = readRefreshCookie(req, this.env);
+    if (token === undefined) throw signIn();
     try {
       return this.respond(res, await this.auth.refresh(token, metaOf(req)));
     } catch (error) {
@@ -119,10 +117,15 @@ export class AuthController {
   // Justification: must work with an expired access token; it only ends the cookie's session.
   @Public()
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
-    await this.auth.logout(readRefreshCookie(req));
+    await this.auth.logout(readRefreshCookie(req, this.env));
     clearRefreshCookie(res, this.env);
   }
 
+  /**
+   * Needs both the access token and the refresh cookie of the same live session: the cookie's
+   * session is ended and replaced. Any 401 clears the cookie; a 403 (not a member of the target)
+   * leaves the session as it was.
+   */
   @Post('switch-tenant')
   @HttpCode(HttpStatus.OK)
   // Justification: acts on the caller's own session; the target membership is checked instead.
@@ -132,8 +135,22 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<TokenResponse> {
-    const grant = await this.auth.switchTenant(this.principal(), body.tenantId, metaOf(req));
-    return this.respond(res, grant);
+    try {
+      const token = readRefreshCookie(req, this.env);
+      if (token === undefined) throw signIn();
+      const grant = await this.auth.switchTenant(
+        this.principal(),
+        body.tenantId,
+        token,
+        metaOf(req),
+      );
+      return this.respond(res, grant);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        clearRefreshCookie(res, this.env);
+      }
+      throw error;
+    }
   }
 
   @Get('me')
@@ -150,10 +167,13 @@ export class AuthController {
 
   private principal(): Principal {
     const principal = this.cls.get('principal');
-    if (principal === undefined)
-      throw new UnauthorizedError('UNAUTHENTICATED', 'Sign in to continue.');
+    if (principal === undefined) throw signIn();
     return principal;
   }
+}
+
+function signIn(): UnauthorizedError {
+  return new UnauthorizedError('UNAUTHENTICATED', 'Sign in to continue.');
 }
 
 function metaOf(req: Request): SessionMeta {

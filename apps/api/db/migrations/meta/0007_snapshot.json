@@ -1,6 +1,6 @@
 {
-  "id": "c9ed76ad-2634-417a-85b6-311533ef4868",
-  "prevId": "39889dd4-77b1-4de0-970b-a1838cf58318",
+  "id": "ff9796e6-927d-4901-a1af-0f878c09fc16",
+  "prevId": "53f9c99a-5e5e-4348-9a9a-eb088275b3a3",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -139,19 +139,6 @@
           "notNull": true,
           "default": "'active'"
         },
-        "failed_login_count": {
-          "name": "failed_login_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "locked_until": {
-          "name": "locked_until",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "last_login_at": {
           "name": "last_login_at",
           "type": "timestamp with time zone",
@@ -206,16 +193,12 @@
         "users_status_valid": {
           "name": "users_status_valid",
           "value": "\"users\".\"status\" in ('active', 'disabled')"
-        },
-        "users_failed_login_count_non_negative": {
-          "name": "users_failed_login_count_non_negative",
-          "value": "\"users\".\"failed_login_count\" >= 0"
         }
       },
       "isRLSEnabled": false
     },
-    "public.refresh_tokens": {
-      "name": "refresh_tokens",
+    "public.sessions": {
+      "name": "sessions",
       "schema": "",
       "columns": {
         "id": {
@@ -234,6 +217,123 @@
           "name": "membership_id",
           "type": "uuid",
           "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "absolute_expires_at": {
+          "name": "absolute_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revoked_reason": {
+          "name": "revoked_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "sessions_user_idx": {
+          "name": "sessions_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_membership_idx": {
+          "name": "sessions_membership_idx",
+          "columns": [
+            {
+              "expression": "membership_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sessions_membership_user_fk": {
+          "name": "sessions_membership_user_fk",
+          "tableFrom": "sessions",
+          "tableTo": "memberships",
+          "columnsFrom": [
+            "membership_id",
+            "user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "user_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "sessions_revoked_reason_valid": {
+          "name": "sessions_revoked_reason_valid",
+          "value": "\"sessions\".\"revoked_reason\" in ('logout', 'reuse_detected', 'switched', 'access_revoked')"
+        },
+        "sessions_revocation_complete": {
+          "name": "sessions_revocation_complete",
+          "value": "(\"sessions\".\"revoked_at\" is null) = (\"sessions\".\"revoked_reason\" is null)"
+        },
+        "sessions_absolute_after_created": {
+          "name": "sessions_absolute_after_created",
+          "value": "\"sessions\".\"absolute_expires_at\" > \"sessions\".\"created_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.refresh_tokens": {
+      "name": "refresh_tokens",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
           "notNull": true
         },
         "family_id": {
@@ -308,26 +408,11 @@
           "method": "btree",
           "with": {}
         },
-        "refresh_tokens_user_idx": {
-          "name": "refresh_tokens_user_idx",
+        "refresh_tokens_replaced_by_idx": {
+          "name": "refresh_tokens_replaced_by_idx",
           "columns": [
             {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "refresh_tokens_membership_idx": {
-          "name": "refresh_tokens_membership_idx",
-          "columns": [
-            {
-              "expression": "membership_id",
+              "expression": "replaced_by_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -340,12 +425,12 @@
         }
       },
       "foreignKeys": {
-        "refresh_tokens_user_id_users_id_fk": {
-          "name": "refresh_tokens_user_id_users_id_fk",
+        "refresh_tokens_family_id_sessions_id_fk": {
+          "name": "refresh_tokens_family_id_sessions_id_fk",
           "tableFrom": "refresh_tokens",
-          "tableTo": "users",
+          "tableTo": "sessions",
           "columnsFrom": [
-            "user_id"
+            "family_id"
           ],
           "columnsTo": [
             "id"
@@ -353,12 +438,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "refresh_tokens_membership_id_memberships_id_fk": {
-          "name": "refresh_tokens_membership_id_memberships_id_fk",
+        "refresh_tokens_replaced_by_fk": {
+          "name": "refresh_tokens_replaced_by_fk",
           "tableFrom": "refresh_tokens",
-          "tableTo": "memberships",
+          "tableTo": "refresh_tokens",
           "columnsFrom": [
-            "membership_id"
+            "replaced_by_id"
           ],
           "columnsTo": [
             "id"
@@ -909,6 +994,14 @@
           "columns": [
             "tenant_id",
             "id"
+          ]
+        },
+        "memberships_id_user_unique": {
+          "name": "memberships_id_user_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "user_id"
           ]
         }
       },
@@ -1887,12 +1980,6 @@
           "notNull": true,
           "default": "1"
         },
-        "last_issued_number": {
-          "name": "last_issued_number",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
         "is_default": {
           "name": "is_default",
           "type": "boolean",
@@ -2059,10 +2146,6 @@
         "document_series_next_number_positive": {
           "name": "document_series_next_number_positive",
           "value": "\"document_series\".\"next_number\" >= 1"
-        },
-        "document_series_next_follows_last_issued": {
-          "name": "document_series_next_follows_last_issued",
-          "value": "\"document_series\".\"last_issued_number\" is null or (\"document_series\".\"last_issued_number\" >= 1 and \"document_series\".\"next_number\" = \"document_series\".\"last_issued_number\" + 1)"
         },
         "document_series_number_length": {
           "name": "document_series_number_length",
