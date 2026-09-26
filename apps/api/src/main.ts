@@ -1,11 +1,7 @@
 import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module.js';
+import { bootstrap, describeBootFailure } from './bootstrap.js';
 
-async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api/v1');
-  await app.listen(Number(process.env.PORT ?? 3000));
-}
-
-void bootstrap();
+bootstrap().catch((error: unknown) => {
+  process.stderr.write(`${describeBootFailure(error)}\n`);
+  process.exit(1);
+});
