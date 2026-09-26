@@ -29,7 +29,9 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
-    if (context.getType() !== 'http') return true;
+    // Deny by default here too: no RPC or WebSocket transport exists yet, and when one arrives it
+    // must get its own authorization instead of inheriting an open door.
+    if (context.getType() !== 'http') return false;
     const handler = context.getHandler();
     const controller: Type = context.getClass();
     if (isPublicRoute(this.reflector, handler, controller)) return true;

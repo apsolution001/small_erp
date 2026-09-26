@@ -15,6 +15,7 @@ import {
   refreshSetCookie,
   refreshTokenOf,
   type SignedUp,
+  signUp,
   signupInput,
 } from '../support/auth.js';
 import { testPlatformDb, withTenantConnection } from '../support/db.js';
@@ -321,6 +322,30 @@ describe('POST /api/v1/auth/signup', () => {
       );
       expect(result.membershipId).toBe(owner.body.membership.id);
       expect(await count()).toEqual(before);
+    });
+
+    it('refuses to accept an existing membership that is not an active Owner one', async () => {
+      const other = await signUp(app);
+      const registration = gstinLookupResponseSchema.parse(
+        (await http(app).get(`/api/v1/platform/gstin/${other.gstin}`).expect(200)).body,
+      );
+      await withTenantConnection(other.body.tenant.id, (c) =>
+        c.query(`update memberships set status = 'disabled' where id = $1`, [
+          other.body.membership.id,
+        ]),
+      );
+      await expect(
+        testPlatformDb().transaction((tx) =>
+          app.get(TenantBootstrapService).bootstrap(tx, {
+            tenantId: other.body.tenant.id,
+            ownerUserId: other.body.user.id,
+            registration,
+            ownerEmail: other.email,
+            ownerMobile: null,
+            now: new Date(),
+          }),
+        ),
+      ).rejects.toThrow(/is not an active all-branches Owner membership/);
     });
   });
 
