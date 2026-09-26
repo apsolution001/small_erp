@@ -18,3 +18,4 @@ The format is Context → Decision → Consequences. ADRs are immutable once `Ac
 | 0012 | [External integrations behind ports (GSP, email, storage, Tally)](0012-integration-ports.md)                      | Accepted |
 | 0013 | [Shared Zod contracts between API and web](0013-shared-contracts.md)                                              | Accepted |
 | 0014 | [Tenant context plumbing: DB-side defaults, request transactions, audit storage](0014-tenant-context-plumbing.md) | Accepted |
+| 0015 | [Sessions, access resolution and platform access to module tables](0015-sessions-access-resolution.md)            | Accepted |
