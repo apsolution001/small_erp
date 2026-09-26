@@ -1,0 +1,133 @@
+import { z } from 'zod';
+import { permissionSchema } from '../access/permissions.js';
+import { membershipStatusSchema, userSummarySchema } from '../access/users.js';
+import {
+  emailSchema,
+  gstinSchema,
+  mobileSchema,
+  refSchema,
+  text,
+  timestampSchema,
+  uuidSchema,
+} from '../common/primitives.js';
+
+const utf8 = new TextEncoder();
+
+/**
+ * New-password policy (security standard): at least 10 characters. At most 72 UTF-8 bytes,
+ * because bcrypt ignores everything after byte 72. The common-password check runs in the API.
+ */
+export const passwordSchema = z
+  .string()
+  .min(10, 'Use at least 10 characters')
+  .refine((p) => utf8.encode(p).length <= 72, 'Use at most 72 bytes');
+
+export const fullNameSchema = text(120);
+
+/** `POST /auth/signup` (spec 01 §3.1). */
+export const signupSchema = z.object({
+  fullName: fullNameSchema,
+  email: emailSchema,
+  mobile: mobileSchema,
+  password: passwordSchema,
+  gstin: gstinSchema,
+  acceptTerms: z.literal(true),
+});
+export type Signup = z.infer<typeof signupSchema>;
+
+/** `POST /auth/login`. The password policy is not applied here: old passwords must still work. */
+export const loginSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1).max(1024),
+  tenantId: uuidSchema.optional(),
+});
+export type Login = z.infer<typeof loginSchema>;
+
+export const selectTenantSchema = z.object({
+  selectionToken: z.string().min(1),
+  tenantId: uuidSchema,
+});
+export type SelectTenant = z.infer<typeof selectTenantSchema>;
+
+export const switchTenantSchema = z.object({ tenantId: uuidSchema });
+export type SwitchTenant = z.infer<typeof switchTenantSchema>;
+
+/**
+ * `POST /auth/accept-invitation`. An existing user sends only the token. A new user also sends
+ * their name and a password, which must come together.
+ */
+export const acceptInvitationSchema = z
+  .object({
+    token: z.string().min(1),
+    fullName: fullNameSchema.optional(),
+    password: passwordSchema.optional(),
+  })
+  .refine((v) => (v.fullName === undefined) === (v.password === undefined), {
+    message: 'Send both full name and password, or neither',
+    path: ['password'],
+  });
+export type AcceptInvitation = z.infer<typeof acceptInvitationSchema>;
+
+export const TENANT_STATUSES = ['trial', 'active', 'suspended', 'closed'] as const;
+export const TENANT_PLANS = ['starter', 'growth', 'pro'] as const;
+
+export const tenantSummarySchema = z.object({
+  id: uuidSchema,
+  slug: z.string(),
+  /** The company's trade name (legal name when there is none). */
+  name: z.string(),
+  status: z.enum(TENANT_STATUSES),
+  plan: z.enum(TENANT_PLANS),
+  trialEndsAt: timestampSchema.nullable(),
+});
+export type TenantSummary = z.infer<typeof tenantSummarySchema>;
+
+export const membershipSummarySchema = z.object({
+  id: uuidSchema,
+  role: refSchema,
+  allBranches: z.boolean(),
+  branchIds: z.array(uuidSchema),
+  status: membershipStatusSchema,
+});
+export type MembershipSummary = z.infer<typeof membershipSummarySchema>;
+
+/**
+ * Returned by signup, login, select-tenant, switch-tenant and refresh. The refresh token travels
+ * only in the httpOnly cookie, never in the body.
+ */
+export const tokenResponseSchema = z.object({
+  accessToken: z.string(),
+  user: userSummarySchema,
+  tenant: tenantSummarySchema,
+  membership: membershipSummarySchema,
+});
+export type TokenResponse = z.infer<typeof tokenResponseSchema>;
+
+export const tenantChoiceSchema = z.object({
+  tenantId: uuidSchema,
+  name: z.string(),
+  slug: z.string(),
+  roleName: z.string(),
+});
+export type TenantChoice = z.infer<typeof tenantChoiceSchema>;
+
+/** Login for a user with several memberships and no `tenantId`: pick one, then select-tenant. */
+export const tenantSelectionResponseSchema = z.object({
+  requiresTenantSelection: z.literal(true),
+  /** Signed, valid for 5 minutes. */
+  selectionToken: z.string(),
+  tenants: z.array(tenantChoiceSchema).min(1),
+});
+export type TenantSelectionResponse = z.infer<typeof tenantSelectionResponseSchema>;
+
+export const loginResponseSchema = z.union([tokenResponseSchema, tenantSelectionResponseSchema]);
+export type LoginResponse = z.infer<typeof loginResponseSchema>;
+
+/** `GET /auth/me`: the membership carries role and branch scope; permissions are effective. */
+export const meResponseSchema = z.object({
+  user: userSummarySchema,
+  tenant: tenantSummarySchema,
+  membership: membershipSummarySchema,
+  permissions: z.array(permissionSchema),
+});
+export type MeResponse = z.infer<typeof meResponseSchema>;
