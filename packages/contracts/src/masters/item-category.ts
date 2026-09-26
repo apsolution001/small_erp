@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from '../common/pagination.js';
-import { recordMetaShape, text, uuidSchema, versionSchema } from '../common/primitives.js';
+import { paginationQuerySchema, sortSchema } from '../common/pagination.js';
+import { recordMetaShape, text, uuidSchema } from '../common/primitives.js';
+import { updateSchema } from '../common/update.js';
 import { activeFilterSchema } from './shared.js';
 
 /** Maximum nesting (spec 02); the service enforces it because it needs the parent chain. */
@@ -13,7 +14,12 @@ const itemCategoryFields = {
   isActive: z.boolean(),
 };
 
-export const itemCategoryResponseSchema = z.object({ ...recordMetaShape, ...itemCategoryFields });
+export const itemCategoryResponseSchema = z.object({
+  ...recordMetaShape,
+  parentId: uuidSchema.nullable(),
+  name: z.string(),
+  isActive: z.boolean(),
+});
 export type ItemCategoryResponse = z.infer<typeof itemCategoryResponseSchema>;
 
 export interface ItemCategoryTreeNode {
@@ -35,7 +41,7 @@ export const itemCategoryTreeNodeSchema: z.ZodType<ItemCategoryTreeNode> = z.obj
   },
 });
 
-export const itemCategoryCreateSchema = z.object({
+export const itemCategoryCreateSchema = z.strictObject({
   ...itemCategoryFields,
   parentId: itemCategoryFields.parentId.default(null),
   isActive: z.boolean().default(true),
@@ -43,13 +49,11 @@ export const itemCategoryCreateSchema = z.object({
 export type ItemCategoryCreate = z.infer<typeof itemCategoryCreateSchema>;
 export type ItemCategoryCreateInput = z.input<typeof itemCategoryCreateSchema>;
 
-export const itemCategoryUpdateSchema = z
-  .object(itemCategoryFields)
-  .partial()
-  .extend({ version: versionSchema });
+export const itemCategoryUpdateSchema = updateSchema(itemCategoryFields);
 export type ItemCategoryUpdate = z.infer<typeof itemCategoryUpdateSchema>;
 
 export const itemCategoryListQuerySchema = paginationQuerySchema.extend({
+  sort: sortSchema(['name', 'createdAt']).optional(),
   tree: z.stringbool().optional(),
   parentId: uuidSchema.optional(),
   active: activeFilterSchema,

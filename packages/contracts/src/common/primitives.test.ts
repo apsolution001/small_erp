@@ -1,7 +1,9 @@
 import { uuidv7 } from '@ekaro/core';
 import { describe, expect, it } from 'vitest';
+import { pathsOf } from '../testing/paths.js';
 import {
   countryCodeSchema,
+  currentStateCodeSchema,
   emailSchema,
   fyLabelSchema,
   gstinSchema,
@@ -14,6 +16,7 @@ import {
   percentSchema,
   phoneSchema,
   pincodeSchema,
+  placeOfSupplySchema,
   positiveQtySchema,
   qtySchema,
   rateSchema,
@@ -49,7 +52,7 @@ describe('moneySchema (paise string)', () => {
 
   it('has a non-negative variant for limits', () => {
     expect(ok(nonNegativeMoneySchema, '0')).toBe(true);
-    expect(ok(nonNegativeMoneySchema, '-1')).toBe(false);
+    expect(pathsOf(nonNegativeMoneySchema.safeParse('-1'))).toEqual(['']);
   });
 });
 
@@ -60,6 +63,7 @@ describe('qty / rate schemas', () => {
     expect(ok(qtySchema, '1.0000001')).toBe(false);
     expect(ok(qtySchema, '100000000000000')).toBe(false);
     expect(ok(qtySchema, 1.5)).toBe(false);
+    expect(ok(qtySchema, '1e3')).toBe(false);
     expect(ok(rateSchema, '0.4575')).toBe(true);
     expect(ok(rateSchema, '-1')).toBe(false);
   });
@@ -105,11 +109,31 @@ describe('panSchema', () => {
 });
 
 describe('stateCodeSchema', () => {
-  it('accepts GST state codes only', () => {
-    expect(ok(stateCodeSchema, '27')).toBe(true);
-    expect(ok(stateCodeSchema, '97')).toBe(true);
+  it('accepts every code in the state table, legacy included (stored data)', () => {
+    for (const code of ['27', '97', '25', '28']) expect(ok(stateCodeSchema, code), code).toBe(true);
     expect(ok(stateCodeSchema, '99')).toBe(false);
     expect(ok(stateCodeSchema, 27)).toBe(false);
+  });
+});
+
+describe('currentStateCodeSchema', () => {
+  it('rejects the legacy codes 25 and 28 and the place-of-supply-only codes', () => {
+    expect(ok(currentStateCodeSchema, '26')).toBe(true);
+    expect(ok(currentStateCodeSchema, '37')).toBe(true);
+    for (const code of ['25', '28', '96', '99']) {
+      expect(ok(currentStateCodeSchema, code), code).toBe(false);
+    }
+  });
+});
+
+describe('placeOfSupplySchema', () => {
+  it('accepts current state codes, 96 (Other Countries) and 99 (Centre Jurisdiction)', () => {
+    for (const code of ['27', '97', '96', '99']) {
+      expect(ok(placeOfSupplySchema, code), code).toBe(true);
+    }
+    for (const code of ['25', '28', '98']) {
+      expect(ok(placeOfSupplySchema, code), code).toBe(false);
+    }
   });
 });
 

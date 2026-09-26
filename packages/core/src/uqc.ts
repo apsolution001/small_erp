@@ -1,12 +1,13 @@
 /**
  * GST Unit Quantity Codes (the GSTN UQC master used by GSTR-1 HSN summaries and e-invoices).
- * Tenant units map onto one of these codes.
+ * Tenant units map onto one of these codes. `NA` is what the GSTR-1 HSN summary reports for
+ * services, which have no quantity unit.
  */
 // prettier-ignore
 export const UQC_CODES = [
   'BAG', 'BAL', 'BDL', 'BKL', 'BOU', 'BOX', 'BTL', 'BUN', 'CAN', 'CBM',
   'CCM', 'CMS', 'CTN', 'DOZ', 'DRM', 'GGK', 'GMS', 'GRS', 'GYD', 'KGS',
-  'KLR', 'KME', 'LTR', 'MLT', 'MTR', 'MTS', 'NOS', 'OTH', 'PAC', 'PCS',
+  'KLR', 'KME', 'LTR', 'MLT', 'MTR', 'MTS', 'NA', 'NOS', 'OTH', 'PAC', 'PCS',
   'PRS', 'QTL', 'ROL', 'SET', 'SQF', 'SQM', 'SQY', 'TBS', 'TGM', 'THD',
   'TON', 'TUB', 'UGS', 'UNT', 'YDS',
 ] as const;
@@ -45,6 +46,7 @@ const DESCRIPTIONS: Readonly<Record<UqcCode, string>> = {
   MLT: 'Millilitre',
   MTR: 'Meters',
   MTS: 'Metric ton',
+  NA: 'Not applicable (services)',
   NOS: 'Numbers',
   OTH: 'Others',
   PAC: 'Packs',

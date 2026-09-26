@@ -1,4 +1,13 @@
-import { STATE_CODES, isValidFyLabel, isValidGstin } from '@ekaro/core';
+import {
+  CURRENT_STATE_CODES,
+  PAISE_PATTERN,
+  PLACE_OF_SUPPLY_CODES,
+  QTY_PATTERN,
+  RATE_PATTERN,
+  STATE_CODES,
+  isValidFyLabel,
+  isValidGstin,
+} from '@ekaro/core';
 import { z } from 'zod';
 
 export const uuidSchema = z.uuid();
@@ -12,7 +21,7 @@ const INT64_MAX = 2n ** 63n - 1n;
  */
 export const moneySchema = z
   .string()
-  .regex(/^-?\d+$/, { message: 'Expected an integer number of paise', abort: true })
+  .regex(PAISE_PATTERN, { message: 'Expected an integer number of paise', abort: true })
   .refine((v) => {
     const n = BigInt(v);
     return n >= INT64_MIN && n <= INT64_MAX;
@@ -26,7 +35,7 @@ export const nonNegativeMoneySchema = moneySchema.refine(
 /** A quantity: decimal string that fits `numeric(20,6)`. The string is preserved exactly. */
 export const qtySchema = z
   .string()
-  .regex(/^-?\d{1,14}(\.\d{1,6})?$/, 'Expected a decimal with at most 6 decimal places');
+  .regex(QTY_PATTERN, 'Expected a decimal with at most 6 decimal places');
 
 const isZeroDecimal = (v: string): boolean => /^-?0+(\.0+)?$/.test(v);
 
@@ -43,7 +52,7 @@ export const positiveQtySchema = qtySchema.refine(
 /** A unit rate in rupees: non-negative decimal string that fits `numeric(20,6)`. */
 export const rateSchema = z
   .string()
-  .regex(/^\d{1,14}(\.\d{1,6})?$/, 'Expected a non-negative rate with at most 6 decimal places');
+  .regex(RATE_PATTERN, 'Expected a non-negative rate with at most 6 decimal places');
 
 /** A percentage that fits `numeric(7,4)`: 0 to 999.9999 (cess slabs can exceed 100%). */
 export const percentSchema = z
@@ -59,7 +68,20 @@ export const panSchema = z
   .toUpperCase()
   .regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/, 'Invalid PAN');
 
+/**
+ * Any code in the GST state table, including the legacy 25 and 28. Use it to read stored and
+ * back-dated data; new addresses and state fields take {@link currentStateCodeSchema}.
+ */
 export const stateCodeSchema = z.enum(STATE_CODES);
+
+/** A state code in use today (no legacy 25 or 28): every master address and state field. */
+export const currentStateCodeSchema = z.enum(CURRENT_STATE_CODES);
+
+/**
+ * A place of supply: a current state code, `96` (Other Countries) or `99` (Centre
+ * Jurisdiction). 96 and 99 are never valid as an address state or a GSTIN prefix.
+ */
+export const placeOfSupplySchema = z.enum(PLACE_OF_SUPPLY_CODES);
 
 /** Indian PIN code: 6 digits, the first is never 0. */
 export const pincodeSchema = z.string().regex(/^[1-9]\d{5}$/, 'Invalid pincode');

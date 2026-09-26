@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { Decimal } from './decimal.js';
-import { Money, formatINR, lineAmount } from './money.js';
+import { Money, PAISE_PATTERN, formatINR, lineAmount } from './money.js';
 
 const paiseOf = (list: readonly Money[]): bigint[] => list.map((m) => m.paise);
 
@@ -40,6 +40,10 @@ describe('Money construction', () => {
     expect(Money.parse('123456789012345678901234567890').paise).toBe(
       123456789012345678901234567890n,
     );
+  });
+
+  it('exposes the paise wire pattern', () => {
+    expect(PAISE_PATTERN.source).toBe(String.raw`^-?\d+$`);
   });
 
   it('rejects paise strings that are not integers', () => {

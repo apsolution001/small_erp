@@ -1,15 +1,15 @@
 import { Decimal } from '@ekaro/core';
 import { z } from 'zod';
-import { paginationQuerySchema } from '../common/pagination.js';
-import { percentSchema, recordMetaShape, text, versionSchema } from '../common/primitives.js';
+import { paginationQuerySchema, sortSchema } from '../common/pagination.js';
+import { percentSchema, recordMetaShape, text } from '../common/primitives.js';
+import { updateSchema } from '../common/update.js';
 import { activeFilterSchema } from './shared.js';
-
-const isZero = (pct: string): boolean => new Decimal(pct).isZero();
 
 const taxRateFields = {
   name: text(50),
   /** Total GST rate. CGST = SGST = rate / 2 and IGST = rate are derived, never stored. */
   gstRate: percentSchema,
+  /** Ad-valorem compensation cess only (accounting standard). */
   cessRate: percentSchema,
   isExempt: z.boolean(),
   isNilRated: z.boolean(),
@@ -17,19 +17,18 @@ const taxRateFields = {
   isActive: z.boolean(),
 };
 
-/** Every field optional: the rules run on creates and on partial updates alike. */
-const taxRatePatchSchema = z.object(taxRateFields).partial();
-type TaxRateRuleInput = z.output<typeof taxRatePatchSchema>;
+const taxRateRecordObject = z.object(taxRateFields);
+type TaxRateRuleInput = z.output<typeof taxRateRecordObject>;
 
 /**
  * GST rate ≤ 100. Exempt, nil-rated and non-GST are mutually exclusive, and such a slab carries
  * no GST or cess.
  */
 const taxRateRules = (value: TaxRateRuleInput, ctx: z.RefinementCtx): void => {
-  if (value.gstRate !== undefined && new Decimal(value.gstRate).greaterThan(100)) {
+  if (new Decimal(value.gstRate).greaterThan(100)) {
     ctx.addIssue({ code: 'custom', path: ['gstRate'], message: 'GST rate cannot exceed 100%' });
   }
-  const flags = (['isExempt', 'isNilRated', 'isNonGst'] as const).filter((f) => value[f] === true);
+  const flags = (['isExempt', 'isNilRated', 'isNonGst'] as const).filter((f) => value[f]);
   for (const extra of flags.slice(1)) {
     ctx.addIssue({
       code: 'custom',
@@ -39,8 +38,7 @@ const taxRateRules = (value: TaxRateRuleInput, ctx: z.RefinementCtx): void => {
   }
   if (flags.length === 0) return;
   for (const field of ['gstRate', 'cessRate'] as const) {
-    const pct = value[field];
-    if (pct !== undefined && !isZero(pct)) {
+    if (!new Decimal(value[field]).isZero()) {
       ctx.addIssue({
         code: 'custom',
         path: [field],
@@ -50,11 +48,24 @@ const taxRateRules = (value: TaxRateRuleInput, ctx: z.RefinementCtx): void => {
   }
 };
 
-export const taxRateResponseSchema = z.object({ ...recordMetaShape, ...taxRateFields });
+/** The whole slab with its rules. The service parses `{ ...existing, ...patch }` with it. */
+export const taxRateRecordSchema = taxRateRecordObject.superRefine(taxRateRules);
+export type TaxRateRecord = z.output<typeof taxRateRecordSchema>;
+
+export const taxRateResponseSchema = z.object({
+  ...recordMetaShape,
+  name: z.string(),
+  gstRate: percentSchema,
+  cessRate: percentSchema,
+  isExempt: z.boolean(),
+  isNilRated: z.boolean(),
+  isNonGst: z.boolean(),
+  isActive: z.boolean(),
+});
 export type TaxRateResponse = z.infer<typeof taxRateResponseSchema>;
 
 export const taxRateCreateSchema = z
-  .object({
+  .strictObject({
     ...taxRateFields,
     cessRate: percentSchema.default('0'),
     isExempt: z.boolean().default(false),
@@ -66,10 +77,19 @@ export const taxRateCreateSchema = z
 export type TaxRateCreate = z.infer<typeof taxRateCreateSchema>;
 export type TaxRateCreateInput = z.input<typeof taxRateCreateSchema>;
 
-export const taxRateUpdateSchema = taxRatePatchSchema
-  .extend({ version: versionSchema })
-  .superRefine(taxRateRules);
+/**
+ * `PATCH /tax-rates/:id`: only the name and the active flag. A slab's rates and flags are
+ * immutable, because documents already reference it. A rate change is a new slab plus an
+ * effective-dated `item_tax_rates` row (`POST /items/:id/tax-rates`).
+ */
+export const taxRateUpdateSchema = updateSchema({
+  name: taxRateFields.name,
+  isActive: taxRateFields.isActive,
+});
 export type TaxRateUpdate = z.infer<typeof taxRateUpdateSchema>;
 
-export const taxRateListQuerySchema = paginationQuerySchema.extend({ active: activeFilterSchema });
+export const taxRateListQuerySchema = paginationQuerySchema.extend({
+  sort: sortSchema(['name', 'gstRate', 'createdAt']).optional(),
+  active: activeFilterSchema,
+});
 export type TaxRateListQuery = z.infer<typeof taxRateListQuerySchema>;

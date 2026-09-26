@@ -13,7 +13,7 @@ import {
 const expand = (resource: string, actions: string): string[] =>
   actions.split('|').map((a) => `${resource}:${a}`);
 
-// Spec 01 §2, transcribed line by line.
+// Spec 01 §2, transcribed line by line (including the deliberate item_tax_rate addition).
 const SPEC_CATALOGUE = [
   ...expand('access.user', 'view|create|edit|delete'),
   ...expand('access.role', 'view|create|edit|delete'),
@@ -25,6 +25,7 @@ const SPEC_CATALOGUE = [
   ...expand('masters.tax_rate', 'view|create|edit|delete'),
   ...expand('masters.item_category', 'view|create|edit|delete'),
   ...expand('masters.item', 'view|create|edit|delete|export'),
+  ...expand('masters.item_tax_rate', 'view|create'),
   ...expand('masters.party', 'view|create|edit|delete|export'),
   ...expand('masters.series', 'view|create|edit'),
   ...expand('platform.billing', 'view|edit'),
@@ -38,6 +39,7 @@ const MASTER_VIEWS = [
   'masters.tax_rate:view',
   'masters.item_category:view',
   'masters.item:view',
+  'masters.item_tax_rate:view',
   'masters.party:view',
   'masters.series:view',
 ];
@@ -83,6 +85,26 @@ describe('DEFAULT_ROLES (spec 01 §2, BRD §8.1)', () => {
     expect(DEFAULT_ROLES.filter((r) => r.allPermissions).map((r) => r.name)).toEqual(['Owner']);
   });
 
+  it('Accountant changes GST rates: new slabs and effective-dated item rates', () => {
+    for (const p of [
+      'masters.tax_rate:create',
+      'masters.item_tax_rate:view',
+      'masters.item_tax_rate:create',
+    ] as const) {
+      expect(hasPermission(defaultRole('Accountant').permissions, p), p).toBe(true);
+    }
+  });
+
+  it('item tax rates: Admin manages them; CA and Viewer only view them', () => {
+    expect(permissionsOf('Admin')).toEqual(
+      expect.arrayContaining(['masters.item_tax_rate:view', 'masters.item_tax_rate:create']),
+    );
+    for (const name of ['CA', 'Viewer']) {
+      expect(permissionsOf(name), name).toContain('masters.item_tax_rate:view');
+      expect(permissionsOf(name), name).not.toContain('masters.item_tax_rate:create');
+    }
+  });
+
   it('Admin has everything except platform.billing', () => {
     expect(permissionsOf('Admin')).toEqual(
       sorted(PERMISSIONS.filter((p) => !p.startsWith('platform.billing:'))),
@@ -94,7 +116,9 @@ describe('DEFAULT_ROLES (spec 01 §2, BRD §8.1)', () => {
       sorted([
         ...MASTER_VIEWS,
         'masters.company:edit',
+        'masters.tax_rate:create',
         'masters.tax_rate:edit',
+        'masters.item_tax_rate:create',
         'masters.party:edit',
         'masters.series:edit',
         'audit.log:view',

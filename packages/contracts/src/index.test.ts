@@ -18,7 +18,10 @@ describe('package root', () => {
       'signupSchema',
       'meResponseSchema',
       'roleCreateSchema',
-      'inviteUserSchema',
+      'userInviteSchema',
+      'userUpdateSchema',
+      'userResponseSchema',
+      'userRecordSchema',
       'companyUpdateSchema',
       'branchCreateSchema',
       'godownCreateSchema',
@@ -29,12 +32,29 @@ describe('package root', () => {
       'partyCreateSchema',
       'documentSeriesCreateSchema',
       'gstinLookupResponseSchema',
+      'currentStateCodeSchema',
+      'placeOfSupplySchema',
+      'companyRecordSchema',
+      'branchRecordSchema',
+      'taxRateRecordSchema',
+      'itemRecordSchema',
+      'partyRecordSchema',
+      'documentSeriesRecordSchema',
     ]) {
       expect(names, name).toContain(name);
     }
     expect(contracts.PERMISSIONS.length).toBeGreaterThan(0);
     expect(contracts.DEFAULT_ROLES).toHaveLength(9);
     expect(contracts.DocType.sales_invoice).toBe('sales_invoice');
+    expect(typeof contracts.sortSchema).toBe('function');
+    expect(typeof contracts.updateSchema).toBe('function');
+    for (const renamed of [
+      'inviteUserSchema',
+      'membershipUpdateSchema',
+      'membershipResponseSchema',
+    ]) {
+      expect(names, renamed).not.toContain(renamed);
+    }
   });
 
   // ADR 0013: the OpenAPI document is generated from these schemas with z.toJSONSchema.

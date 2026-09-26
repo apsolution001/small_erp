@@ -1,23 +1,44 @@
 import { uuidv7 } from '@ekaro/core';
 import { describe, expect, it } from 'vitest';
+import { pathsOf, unrecognizedKeysOf } from '../testing/paths.js';
 import {
   itemCategoryCreateSchema,
   itemCategoryListQuerySchema,
+  itemCategoryResponseSchema,
   itemCategoryTreeNodeSchema,
+  itemCategoryUpdateSchema,
 } from './item-category.js';
 import {
   itemCreateSchema,
   itemListQuerySchema,
+  itemRecordSchema,
+  itemResponseSchema,
   itemTaxRateCreateSchema,
   itemUpdateSchema,
 } from './item.js';
-import { taxRateCreateSchema } from './tax-rate.js';
-import { unitCreateSchema } from './unit.js';
+import {
+  taxRateCreateSchema,
+  taxRateListQuerySchema,
+  taxRateRecordSchema,
+  taxRateResponseSchema,
+  taxRateUpdateSchema,
+} from './tax-rate.js';
+import {
+  unitCreateSchema,
+  unitListQuerySchema,
+  unitResponseSchema,
+  unitUpdateSchema,
+  uqcSchema,
+} from './unit.js';
 
-const pathsOf = (result: { error?: { issues: { path: PropertyKey[] }[] } | undefined }): string[] =>
-  (result.error?.issues ?? []).map((i) => i.path.join('.'));
+const meta = {
+  id: uuidv7(),
+  version: 2,
+  createdAt: '2026-04-01T04:30:00.000Z',
+  updatedAt: '2026-09-26T10:15:00.123Z',
+};
 
-describe('unitCreateSchema', () => {
+describe('unit schemas', () => {
   it('upper-cases the code and maps to a GST UQC', () => {
     expect(unitCreateSchema.parse({ code: 'bag', name: 'Bag of 50 kg', uqc: 'BAG' })).toEqual({
       code: 'BAG',
@@ -28,21 +49,65 @@ describe('unitCreateSchema', () => {
     });
   });
 
+  it('knows the UQC NA for services', () => {
+    expect(uqcSchema.parse('NA')).toBe('NA');
+  });
+
   it('rejects unknown UQCs, long codes and more than 6 decimal places', () => {
-    expect(unitCreateSchema.safeParse({ code: 'BAG', name: 'Bag', uqc: 'SACK' }).success).toBe(
-      false,
-    );
-    expect(unitCreateSchema.safeParse({ code: 'ABCDEFGHIJK', name: 'X', uqc: 'OTH' }).success).toBe(
-      false,
-    );
+    expect(pathsOf(unitCreateSchema.safeParse({ code: 'BAG', name: 'Bag', uqc: 'SACK' }))).toEqual([
+      'uqc',
+    ]);
     expect(
-      unitCreateSchema.safeParse({ code: 'KG', name: 'Kilo', uqc: 'KGS', decimalPlaces: 7 })
-        .success,
-    ).toBe(false);
+      pathsOf(unitCreateSchema.safeParse({ code: 'ABCDEFGHIJK', name: 'X', uqc: 'OTH' })),
+    ).toEqual(['code']);
+    expect(
+      pathsOf(
+        unitCreateSchema.safeParse({ code: 'KG', name: 'Kilo', uqc: 'KGS', decimalPlaces: 7 }),
+      ),
+    ).toEqual(['decimalPlaces']);
+  });
+
+  it('updates without create defaults, needs a change, and is strict', () => {
+    expect(unitUpdateSchema.parse({ name: 'Kilogram', version: 2 })).toEqual({
+      name: 'Kilogram',
+      version: 2,
+    });
+    expect(pathsOf(unitUpdateSchema.safeParse({ version: 2 }))).toEqual(['']);
+    expect(
+      unrecognizedKeysOf(unitCreateSchema.safeParse({ code: 'KG', name: 'K', uqc: 'KGS', id: 1 })),
+    ).toEqual(['id']);
+  });
+
+  it('sorts on allowed columns only', () => {
+    expect(unitListQuerySchema.parse({ sort: 'code:desc' }).sort).toBe('code:desc');
+    expect(pathsOf(unitListQuerySchema.safeParse({ sort: 'uqc:asc' }))).toEqual(['sort']);
+  });
+
+  it('parses a DB-shaped unit row', () => {
+    const row = {
+      ...meta,
+      code: 'KGS',
+      name: 'Kilograms',
+      uqc: 'KGS',
+      decimalPlaces: 3,
+      isActive: true,
+    };
+    expect(unitResponseSchema.parse(row)).toEqual(row);
   });
 });
 
-describe('taxRateCreateSchema', () => {
+describe('tax rate schemas', () => {
+  const existing = {
+    ...meta,
+    name: 'Exempt',
+    gstRate: '0.0000',
+    cessRate: '0.0000',
+    isExempt: true,
+    isNilRated: false,
+    isNonGst: false,
+    isActive: true,
+  };
+
   it('defaults cess and flags', () => {
     expect(taxRateCreateSchema.parse({ name: 'GST 18%', gstRate: '18' })).toEqual({
       name: 'GST 18%',
@@ -73,6 +138,11 @@ describe('taxRateCreateSchema', () => {
     ).toEqual(['gstRate']);
     expect(
       pathsOf(
+        taxRateCreateSchema.safeParse({ name: 'Bad', gstRate: '0', cessRate: '1', isNonGst: true }),
+      ),
+    ).toEqual(['cessRate']);
+    expect(
+      pathsOf(
         taxRateCreateSchema.safeParse({
           name: 'Bad',
           gstRate: '0',
@@ -81,6 +151,38 @@ describe('taxRateCreateSchema', () => {
         }),
       ),
     ).toEqual(['isNilRated']);
+  });
+
+  it('update changes only the name and the active flag: rates are immutable', () => {
+    expect(
+      taxRateUpdateSchema.parse({ name: 'GST 12% (old)', isActive: false, version: 2 }),
+    ).toEqual({ name: 'GST 12% (old)', isActive: false, version: 2 });
+    expect(
+      unrecognizedKeysOf(
+        taxRateUpdateSchema.safeParse({ gstRate: '5', cessRate: '1', isExempt: false, version: 2 }),
+      ),
+    ).toEqual(['gstRate', 'cessRate', 'isExempt']);
+    expect(pathsOf(taxRateUpdateSchema.safeParse({ version: 2 }))).toEqual(['']);
+  });
+
+  it('the record schema rejects a merged slab that breaks the rules', () => {
+    // A patch can no longer touch rates, but the merged record is still checked as a whole.
+    const patch = { name: 'Exempt goods', version: 2 };
+    expect(taxRateUpdateSchema.safeParse(patch).success).toBe(true);
+    expect(taxRateRecordSchema.safeParse({ ...existing, ...patch }).success).toBe(true);
+    expect(pathsOf(taxRateRecordSchema.safeParse({ ...existing, gstRate: '5' }))).toEqual([
+      'gstRate',
+    ]);
+  });
+
+  it('sorts on allowed columns only', () => {
+    expect(taxRateListQuerySchema.parse({ sort: 'gstRate:asc' }).sort).toBe('gstRate:asc');
+    expect(pathsOf(taxRateListQuerySchema.safeParse({ sort: 'isExempt:asc' }))).toEqual(['sort']);
+  });
+
+  it('parses a DB-shaped slab (numeric(7,4) strings)', () => {
+    const row = { ...existing, name: 'GST 40%', gstRate: '40.0000', isExempt: false };
+    expect(taxRateResponseSchema.parse(row)).toEqual(row);
   });
 });
 
@@ -94,10 +196,26 @@ describe('item category schemas', () => {
     expect(itemCategoryListQuerySchema.parse({ tree: 'true' }).tree).toBe(true);
   });
 
-  it('parses a nested tree', () => {
+  it('updates without create defaults and is strict', () => {
+    expect(itemCategoryUpdateSchema.parse({ name: 'Metals', version: 1 })).toEqual({
+      name: 'Metals',
+      version: 1,
+    });
+    expect(pathsOf(itemCategoryUpdateSchema.safeParse({ version: 1 }))).toEqual(['']);
+    expect(unrecognizedKeysOf(itemCategoryCreateSchema.safeParse({ name: 'X', depth: 1 }))).toEqual(
+      ['depth'],
+    );
+    expect(pathsOf(itemCategoryListQuerySchema.safeParse({ sort: 'parentId:asc' }))).toEqual([
+      'sort',
+    ]);
+  });
+
+  it('parses a nested tree and a DB-shaped row', () => {
     const leaf = { id: uuidv7(), name: 'TMT bars', parentId: null, isActive: true, children: [] };
     const tree = { ...leaf, name: 'Steel', children: [leaf] };
     expect(itemCategoryTreeNodeSchema.parse(tree)).toEqual(tree);
+    const row = { ...meta, parentId: uuidv7(), name: 'TMT bars', isActive: false };
+    expect(itemCategoryResponseSchema.parse(row)).toEqual(row);
   });
 });
 
@@ -112,6 +230,27 @@ describe('item schemas', () => {
     hsnSac: '7214',
     baseUnitId: kgs,
     taxRateId: uuidv7(),
+  };
+  const { taxRateId: _initialRate, ...goodsFields } = goods;
+  const stored = {
+    ...meta,
+    ...goodsFields,
+    itemType: 'goods' as const,
+    itemKind: 'trading' as const,
+    description: null,
+    categoryId: null,
+    purchaseUnitId: null,
+    salesUnitId: null,
+    reorderLevel: null,
+    reorderQty: null,
+    minOrderQty: null,
+    trackBatches: true,
+    trackExpiry: true,
+    standardPurchaseRate: null,
+    standardSalesRate: '62.500000',
+    isActive: true,
+    units: [{ unitId: bag, factorToBase: '50.000000' }],
+    taxRates: [{ id: uuidv7(), taxRateId: goods.taxRateId, effectiveFrom: '2026-04-01' }],
   };
 
   it('applies defaults and keeps decimal strings exactly', () => {
@@ -145,9 +284,13 @@ describe('item schemas', () => {
     expect(
       itemCreateSchema.safeParse({ ...goods, trackBatches: true, trackExpiry: true }).success,
     ).toBe(true);
-    expect(
-      pathsOf(itemUpdateSchema.safeParse({ trackBatches: false, trackExpiry: true, version: 1 })),
-    ).toEqual(['trackExpiry']);
+  });
+
+  it('rejects a patch that is valid alone but breaks track_expiry once merged', () => {
+    const patch = { trackBatches: false, version: 2 };
+    expect(itemUpdateSchema.safeParse(patch).success).toBe(true);
+    expect(itemRecordSchema.safeParse(stored).success).toBe(true);
+    expect(pathsOf(itemRecordSchema.safeParse({ ...stored, ...patch }))).toEqual(['trackExpiry']);
   });
 
   it('HSN for goods is 4, 6 or 8 digits; SAC for services is 6 digits starting 99', () => {
@@ -201,15 +344,19 @@ describe('item schemas', () => {
         itemCreateSchema.safeParse({ ...goods, units: [{ unitId: kgs, factorToBase: '1' }] }),
       ),
     ).toEqual(['units.0.unitId']);
+    expect(
+      unrecognizedKeysOf(
+        itemCreateSchema.safeParse({ ...goods, units: [{ unitId: bag, factorToBase: '5', x: 1 }] }),
+      ),
+    ).toEqual(['x']);
   });
 
-  it('an update that replaces units without the base unit still rejects duplicates', () => {
-    const units = [
-      { unitId: bag, factorToBase: '50' },
-      { unitId: bag, factorToBase: '25' },
-    ];
-    expect(pathsOf(itemUpdateSchema.safeParse({ units, salesUnitId: bag, version: 1 }))).toEqual([
-      'units.1.unitId',
+  it('a patch that drops a unit still used as the sales unit is rejected once merged', () => {
+    const withSalesBag = { ...stored, salesUnitId: bag };
+    const patch = { units: [], version: 2 };
+    expect(itemUpdateSchema.safeParse(patch).success).toBe(true);
+    expect(pathsOf(itemRecordSchema.safeParse({ ...withSalesBag, ...patch }))).toEqual([
+      'salesUnitId',
     ]);
   });
 
@@ -231,13 +378,16 @@ describe('item schemas', () => {
     ]);
   });
 
-  it('requires an initial tax rate on create but not on update', () => {
-    const { taxRateId: _omit, ...withoutRate } = goods;
-    expect(pathsOf(itemCreateSchema.safeParse(withoutRate))).toEqual(['taxRateId']);
+  it('requires an initial tax rate on create; update has none and applies no defaults', () => {
+    expect(pathsOf(itemCreateSchema.safeParse(goodsFields))).toEqual(['taxRateId']);
     expect(itemUpdateSchema.parse({ name: 'TMT bar 8mm Fe500', version: 5 })).toEqual({
       name: 'TMT bar 8mm Fe500',
       version: 5,
     });
+    expect(pathsOf(itemUpdateSchema.safeParse({ version: 5 }))).toEqual(['']);
+    expect(
+      unrecognizedKeysOf(itemUpdateSchema.safeParse({ taxRateId: goods.taxRateId, version: 5 })),
+    ).toEqual(['taxRateId']);
   });
 
   it('adds effective-dated tax rates and filters lists', () => {
@@ -246,9 +396,27 @@ describe('item schemas', () => {
       taxRateId,
       effectiveFrom: '2025-09-22',
     });
-    expect(itemListQuerySchema.parse({ kind: 'raw_material', active: 'true' })).toMatchObject({
-      kind: 'raw_material',
-      active: true,
-    });
+    expect(
+      unrecognizedKeysOf(
+        itemTaxRateCreateSchema.safeParse({ taxRateId, effectiveFrom: '2025-09-22', gstRate: '5' }),
+      ),
+    ).toEqual(['gstRate']);
+    expect(
+      itemListQuerySchema.parse({ kind: 'raw_material', active: 'true', sort: 'hsnSac:asc' }),
+    ).toMatchObject({ kind: 'raw_material', active: true, sort: 'hsnSac:asc' });
+    expect(pathsOf(itemListQuerySchema.safeParse({ sort: 'standardSalesRate:asc' }))).toEqual([
+      'sort',
+    ]);
+  });
+
+  it('parses a DB-shaped item row', () => {
+    const row = {
+      ...stored,
+      hsnSac: '72142090',
+      reorderLevel: '0.000000', // numeric(20,6) comes back with its full scale
+      reorderQty: '250.000000',
+      standardPurchaseRate: '0.000000',
+    };
+    expect(itemResponseSchema.parse(row)).toEqual(row);
   });
 });

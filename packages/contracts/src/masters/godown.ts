@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from '../common/pagination.js';
-import { recordMetaShape, text, uuidSchema, versionSchema } from '../common/primitives.js';
+import { paginationQuerySchema, sortSchema } from '../common/pagination.js';
+import { recordMetaShape, text, uuidSchema } from '../common/primitives.js';
+import { updateSchema } from '../common/update.js';
 import { activeFilterSchema } from './shared.js';
 
 const godownFields = {
@@ -12,10 +13,18 @@ const godownFields = {
   isActive: z.boolean(),
 };
 
-export const godownResponseSchema = z.object({ ...recordMetaShape, ...godownFields });
+export const godownResponseSchema = z.object({
+  ...recordMetaShape,
+  branchId: uuidSchema,
+  code: z.string(),
+  name: z.string(),
+  address: z.string().nullable(),
+  allowNegativeStock: z.boolean(),
+  isActive: z.boolean(),
+});
 export type GodownResponse = z.infer<typeof godownResponseSchema>;
 
-export const godownCreateSchema = z.object({
+export const godownCreateSchema = z.strictObject({
   ...godownFields,
   address: godownFields.address.default(null),
   allowNegativeStock: z.boolean().default(false),
@@ -24,13 +33,11 @@ export const godownCreateSchema = z.object({
 export type GodownCreate = z.infer<typeof godownCreateSchema>;
 export type GodownCreateInput = z.input<typeof godownCreateSchema>;
 
-export const godownUpdateSchema = z
-  .object(godownFields)
-  .partial()
-  .extend({ version: versionSchema });
+export const godownUpdateSchema = updateSchema(godownFields);
 export type GodownUpdate = z.infer<typeof godownUpdateSchema>;
 
 export const godownListQuerySchema = paginationQuerySchema.extend({
+  sort: sortSchema(['code', 'name', 'createdAt']).optional(),
   branchId: uuidSchema.optional(),
   active: activeFilterSchema,
 });

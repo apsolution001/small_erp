@@ -3,6 +3,13 @@ import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+/** Only @ekaro/core configures decimal.js (ADR 0005); everything else uses its clone. */
+const decimalJsImport = {
+  name: 'decimal.js',
+  message:
+    'Import Decimal / toDecimal / parseQty / parseRate from @ekaro/core: a bare decimal.js has the wrong precision and rounding (ADR 0005).',
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -47,13 +54,21 @@ export default tseslint.config(
     },
   },
   {
+    // Precision safety: decimal.js is configured once, in packages/core.
+    files: ['**/*.{ts,tsx,js,mjs,cjs}'],
+    ignores: ['packages/core/**'],
+    rules: { 'no-restricted-imports': ['error', { paths: [decimalJsImport] }] },
+  },
+  {
     // Module boundaries (ADR 0001, 0003): only platform/auth may use the platform DB connection.
+    // Repeats the decimal.js restriction because a later rule entry replaces an earlier one.
     files: ['apps/api/src/modules/**/*.ts'],
     ignores: ['apps/api/src/modules/platform/**', 'apps/api/src/modules/auth/**'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
+          paths: [decimalJsImport],
           patterns: [
             {
               group: ['**/infra/db/platform-db*'],

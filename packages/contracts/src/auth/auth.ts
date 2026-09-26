@@ -13,6 +13,8 @@ import {
 
 const utf8 = new TextEncoder();
 
+// Request bodies are strict: an unknown key is a 422, never silently dropped.
+
 /**
  * New-password policy (security standard): at least 10 characters. At most 72 UTF-8 bytes,
  * because bcrypt ignores everything after byte 72. The common-password check runs in the API.
@@ -25,7 +27,7 @@ export const passwordSchema = z
 export const fullNameSchema = text(120);
 
 /** `POST /auth/signup` (spec 01 §3.1). */
-export const signupSchema = z.object({
+export const signupSchema = z.strictObject({
   fullName: fullNameSchema,
   email: emailSchema,
   mobile: mobileSchema,
@@ -36,20 +38,20 @@ export const signupSchema = z.object({
 export type Signup = z.infer<typeof signupSchema>;
 
 /** `POST /auth/login`. The password policy is not applied here: old passwords must still work. */
-export const loginSchema = z.object({
+export const loginSchema = z.strictObject({
   email: emailSchema,
   password: z.string().min(1).max(1024),
   tenantId: uuidSchema.optional(),
 });
 export type Login = z.infer<typeof loginSchema>;
 
-export const selectTenantSchema = z.object({
+export const selectTenantSchema = z.strictObject({
   selectionToken: z.string().min(1),
   tenantId: uuidSchema,
 });
 export type SelectTenant = z.infer<typeof selectTenantSchema>;
 
-export const switchTenantSchema = z.object({ tenantId: uuidSchema });
+export const switchTenantSchema = z.strictObject({ tenantId: uuidSchema });
 export type SwitchTenant = z.infer<typeof switchTenantSchema>;
 
 /**
@@ -57,7 +59,7 @@ export type SwitchTenant = z.infer<typeof switchTenantSchema>;
  * their name and a password, which must come together.
  */
 export const acceptInvitationSchema = z
-  .object({
+  .strictObject({
     token: z.string().min(1),
     fullName: fullNameSchema.optional(),
     password: passwordSchema.optional(),

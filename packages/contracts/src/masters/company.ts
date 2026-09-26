@@ -9,7 +9,8 @@ import {
   timestampSchema,
   versionSchema,
 } from '../common/primitives.js';
-import { checkGstinConsistency, indianAddressShape } from './shared.js';
+import { updateSchema } from '../common/update.js';
+import { checkGstinConsistency, indianAddressResponseShape, indianAddressShape } from './shared.js';
 
 export const VALUATION_METHODS = ['fifo', 'weighted_average'] as const;
 export const valuationMethodSchema = z.enum(VALUATION_METHODS);
@@ -27,8 +28,9 @@ const companyFields = {
   ...indianAddressShape,
   email: emailSchema.nullable(),
   phone: phoneSchema.nullable(),
+  /** Locked after the first posting (enforced by the T-106 and Sprint 2 services). */
   booksBeginDate: isoDateSchema,
-  /** Editable only until the first stock posting (enforced from Sprint 2). */
+  /** Locked after the first posting (enforced by the T-106 and Sprint 2 services). */
   valuationMethod: valuationMethodSchema,
   allowNegativeStock: z.boolean(),
   roundOffSales: z.boolean(),
@@ -36,17 +38,36 @@ const companyFields = {
   eInvoiceEnabled: z.boolean(),
 };
 
-/** Every field optional: the rules run on creates and on partial updates alike. */
-const companyPatchSchema = z.object(companyFields).partial();
-type CompanyRuleInput = z.output<typeof companyPatchSchema>;
+const companyRecordObject = z.object(companyFields);
+type CompanyRuleInput = z.output<typeof companyRecordObject>;
 
+/** The GSTIN is registered in the company's state, and its PAN is the company's PAN. */
 const companyRules = (value: CompanyRuleInput, ctx: z.RefinementCtx): void => {
-  checkGstinConsistency(value, value.stateCode, ctx);
+  checkGstinConsistency(value, ctx);
 };
+
+/**
+ * The whole company profile with its cross-field rules. `PATCH /company` parses
+ * `companyRecordSchema.parse({ ...existing, ...patch })` before saving.
+ */
+export const companyRecordSchema = companyRecordObject.superRefine(companyRules);
+export type CompanyRecord = z.output<typeof companyRecordSchema>;
 
 /** `GET /company`. One profile per tenant, keyed by the tenant, so it has no `id`. */
 export const companyResponseSchema = z.object({
-  ...companyFields,
+  legalName: z.string(),
+  tradeName: z.string().nullable(),
+  gstin: z.string().nullable(),
+  pan: z.string().nullable(),
+  ...indianAddressResponseShape,
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  booksBeginDate: isoDateSchema,
+  valuationMethod: valuationMethodSchema,
+  allowNegativeStock: z.boolean(),
+  roundOffSales: z.boolean(),
+  hsnMinDigits: hsnMinDigitsSchema,
+  eInvoiceEnabled: z.boolean(),
   logoObjectKey: z.string().nullable(),
   version: versionSchema,
   createdAt: timestampSchema,
@@ -56,7 +77,7 @@ export type CompanyResponse = z.infer<typeof companyResponseSchema>;
 
 /** Used by the tenant bootstrap (signup), not exposed as an HTTP route. */
 export const companyCreateSchema = z
-  .object({
+  .strictObject({
     ...companyFields,
     tradeName: companyFields.tradeName.default(null),
     line2: companyFields.line2.default(null),
@@ -73,7 +94,5 @@ export type CompanyCreate = z.infer<typeof companyCreateSchema>;
 export type CompanyCreateInput = z.input<typeof companyCreateSchema>;
 
 /** `PATCH /company`. */
-export const companyUpdateSchema = companyPatchSchema
-  .extend({ version: versionSchema })
-  .superRefine(companyRules);
+export const companyUpdateSchema = updateSchema(companyFields);
 export type CompanyUpdate = z.infer<typeof companyUpdateSchema>;

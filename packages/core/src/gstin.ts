@@ -1,4 +1,4 @@
-import { isValidStateCode } from './states.js';
+import { isCurrentStateCode } from './states.js';
 
 /** GSTIN format (spec 02 §1): state, PAN, entity number, `Z`, check character. */
 export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -26,13 +26,15 @@ export function computeGstinChecksum(first14: string): string {
 }
 
 /**
- * True when the value has the GSTIN format, a known state code and a correct check character.
+ * True when the value has the GSTIN format, a current state code and a correct check character.
+ * The legacy codes 28 (Andhra Pradesh before 2014) and 25 (Daman and Diu, merged into 26 in
+ * 2020) are rejected: those registrations were migrated, so a new GSTIN never carries them.
  * The value must already be trimmed and upper-case (the contracts schema normalises input).
  */
 export function isValidGstin(value: string): boolean {
   return (
     GSTIN_PATTERN.test(value) &&
-    isValidStateCode(value.slice(0, 2)) &&
+    isCurrentStateCode(value.slice(0, 2)) &&
     computeGstinChecksum(value.slice(0, 14)) === value.charAt(14)
   );
 }

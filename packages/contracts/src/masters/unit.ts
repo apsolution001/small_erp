@@ -1,7 +1,8 @@
 import { UQC_CODES } from '@ekaro/core';
 import { z } from 'zod';
-import { paginationQuerySchema } from '../common/pagination.js';
-import { recordMetaShape, text, versionSchema } from '../common/primitives.js';
+import { paginationQuerySchema, sortSchema } from '../common/pagination.js';
+import { recordMetaShape, text } from '../common/primitives.js';
+import { updateSchema } from '../common/update.js';
 import { activeFilterSchema } from './shared.js';
 
 export const uqcSchema = z.enum(UQC_CODES);
@@ -20,10 +21,17 @@ const unitFields = {
   isActive: z.boolean(),
 };
 
-export const unitResponseSchema = z.object({ ...recordMetaShape, ...unitFields });
+export const unitResponseSchema = z.object({
+  ...recordMetaShape,
+  code: z.string(),
+  name: z.string(),
+  uqc: uqcSchema,
+  decimalPlaces: z.int(),
+  isActive: z.boolean(),
+});
 export type UnitResponse = z.infer<typeof unitResponseSchema>;
 
-export const unitCreateSchema = z.object({
+export const unitCreateSchema = z.strictObject({
   ...unitFields,
   decimalPlaces: unitFields.decimalPlaces.default(0),
   isActive: z.boolean().default(true),
@@ -31,8 +39,11 @@ export const unitCreateSchema = z.object({
 export type UnitCreate = z.infer<typeof unitCreateSchema>;
 export type UnitCreateInput = z.input<typeof unitCreateSchema>;
 
-export const unitUpdateSchema = z.object(unitFields).partial().extend({ version: versionSchema });
+export const unitUpdateSchema = updateSchema(unitFields);
 export type UnitUpdate = z.infer<typeof unitUpdateSchema>;
 
-export const unitListQuerySchema = paginationQuerySchema.extend({ active: activeFilterSchema });
+export const unitListQuerySchema = paginationQuerySchema.extend({
+  sort: sortSchema(['code', 'name', 'createdAt']).optional(),
+  active: activeFilterSchema,
+});
 export type UnitListQuery = z.infer<typeof unitListQuerySchema>;

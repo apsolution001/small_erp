@@ -30,6 +30,8 @@ Every change in this area needs review by the `accounting-reviewer` agent, and t
 
 - **Place of supply** decides the tax type. If supplier state = place-of-supply state, charge **CGST + SGST** (each half of the rate). Otherwise charge **IGST**. For goods, the place of supply is the delivery location's state. Unregistered buyers use the delivery address state.
 - GST rates are **data** (the `tax_rates` master with effective dates), never constants in code. Rates changed in the GST 2.0 reform, and they will change again.
+- A tax-rate slab is **immutable in its rates** once created: only its name and active flag change. A rate change is a new slab plus an effective-dated `item_tax_rates` row, so documents dated before the change keep the old rate (spec 02).
+- **Compensation cess is ad valorem only in V1.** `splitTax` computes cess as a percentage of the taxable value. Specific (per-unit, e.g. ₹ per 1,000 sticks) and compound (ad valorem + specific) cess are out of V1 scope, and no item should be set up with them until a spec adds them.
 - An HSN code is mandatory on items: at least 4 digits where turnover ≤ ₹5 cr and 6 digits above that (a company setting). SAC is used for services.
 - Invoice numbers are **gapless and unique per series per financial year**, at most 16 characters, allowed characters `A-Z a-z 0-9 / -` (GST rule 46). They are allocated inside the posting transaction with `SELECT ... FOR UPDATE` on the series row.
 - E-invoice and e-way bill go through the `GspProvider` interface only (the provider is still an open decision, and sandbox and mock implementations exist). An IRN can be cancelled only within 24 hours. After that, use a credit note.

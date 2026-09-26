@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pathsOf } from '../testing/paths.js';
 import { ERROR_CODES, ErrorCode, problemSchema } from './errors.js';
 
 describe('ErrorCode', () => {
@@ -64,12 +65,19 @@ describe('problemSchema (RFC 9457)', () => {
       }).success,
     ).toBe(true);
     expect(
-      problemSchema.safeParse({ type: 'about:blank', title: 'x', status: 404, code: 'NOPE' })
-        .success,
-    ).toBe(false);
+      pathsOf(
+        problemSchema.safeParse({ type: 'about:blank', title: 'x', status: 404, code: 'NOPE' }),
+      ),
+    ).toEqual(['code']);
     expect(
-      problemSchema.safeParse({ type: 'about:blank', title: 'x', status: 200, code: 'NOT_FOUND' })
-        .success,
-    ).toBe(false);
+      pathsOf(
+        problemSchema.safeParse({
+          type: 'about:blank',
+          title: 'x',
+          status: 200,
+          code: 'NOT_FOUND',
+        }),
+      ),
+    ).toEqual(['status']);
   });
 });

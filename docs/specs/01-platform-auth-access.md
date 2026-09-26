@@ -57,26 +57,31 @@ masters.company:view|edit                  masters.branch:view|create|edit|delet
 masters.godown:view|create|edit|delete     masters.unit:view|create|edit|delete
 masters.tax_rate:view|create|edit|delete   masters.item_category:view|create|edit|delete
 masters.item:view|create|edit|delete|export
+masters.item_tax_rate:view|create
 masters.party:view|create|edit|delete|export
 masters.series:view|create|edit
 platform.billing:view|edit
 ```
 
+`masters.item_tax_rate` is a **deliberate addition** to the original Sprint-1 slice (T-102 review). Tax-rate slabs are immutable in their rates (spec 02), so a GST rate change is made by creating a new slab (`masters.tax_rate:create`) and adding an effective-dated row to the item (`POST /items/:id/tax-rates`, `masters.item_tax_rate:create`). Viewing an item's rate history needs `masters.item_tax_rate:view`.
+
 Later sprints extend the catalogue (inventory._, purchase._, sales._, production._, accounts._, gst._, reports.*).
 
 ### Default roles (BRD §8.1), seeded per tenant
 
-| Role       | Billable | Sprint-1 permissions                                                   |
-| ---------- | -------- | ---------------------------------------------------------------------- |
-| Owner      | yes      | all (always all, including future permissions: computed, not stored)   |
-| Admin      | yes      | all except `platform.billing:*`                                        |
-| Accountant | yes      | view all masters; edit company, tax rates, parties, series; audit view |
-| Purchase   | yes      | items/parties view, create and edit (vendors); units/categories view   |
-| Sales      | yes      | items view; parties view, create and edit (customers)                  |
-| Store      | yes      | items, units, godowns view                                             |
-| Production | yes      | items view, create and edit; units view                                |
-| CA         | **no**   | view on all masters, export, audit view                                |
-| Viewer     | **no**   | view on all masters                                                    |
+| Role       | Billable | Sprint-1 permissions                                                                                          |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| Owner      | yes      | all (always all, including future permissions: computed, not stored)                                          |
+| Admin      | yes      | all except `platform.billing:*`                                                                               |
+| Accountant | yes      | view all masters; edit company, parties, series; create and edit tax rates; create item tax rates; audit view |
+| Purchase   | yes      | items/parties view, create and edit (vendors); units/categories view                                          |
+| Sales      | yes      | items view; parties view, create and edit (customers)                                                         |
+| Store      | yes      | items, units, godowns view                                                                                    |
+| Production | yes      | items view, create and edit; units view                                                                       |
+| CA         | **no**   | view on all masters (item tax rates included), export, audit view                                             |
+| Viewer     | **no**   | view on all masters (item tax rates included)                                                                 |
+
+"View all masters" is every `masters.*:view`, so it includes `masters.item_tax_rate:view`. Admin has everything except billing, so it can view and create item tax rates. Accountant's `masters.tax_rate:create` and `masters.item_tax_rate:create` are the deliberate deviation above: the Accountant is the role that changes GST rates.
 
 ## 3. Flows & rules
 
