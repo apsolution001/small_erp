@@ -80,19 +80,38 @@ export class EnvValidationError extends Error {
   }
 }
 
-/** Parses a raw environment. Throws {@link EnvValidationError} listing every invalid variable. */
-export function parseEnv(raw: RawEnv): Env {
-  const result = envSchema.safeParse(raw);
+function parseWith<T>(schema: z.ZodType<T>, raw: RawEnv): T {
+  const result = schema.safeParse(raw);
   if (result.success) return result.data;
   throw new EnvValidationError(
-    result.error.issues.map((issue) => ({
-      variable: issue.path.map(String).join('.') || '(root)',
-      message: issue.message,
-    })),
+    result.error.issues.map((issue) => {
+      const variable = issue.path.map(String).join('.') || '(root)';
+      // Zod reports a missing number as NaN after coercion; name the real problem instead.
+      const missing = issue.path.length === 1 && raw[variable] === undefined;
+      return { variable, message: missing ? 'is required' : issue.message };
+    }),
   );
 }
 
-/** Parses the process environment. */
+/** Parses a raw environment. Throws {@link EnvValidationError} listing every invalid variable. */
+export function parseEnv(raw: RawEnv): Env {
+  return parseWith(envSchema, raw);
+}
+
+/** Parses the process environment for the API. */
 export function loadEnv(): Env {
   return parseEnv(process.env);
+}
+
+const migrationEnvSchema = z.object({ DATABASE_URL_OWNER: postgresUrl });
+export type MigrationEnv = z.infer<typeof migrationEnvSchema>;
+
+/** The migration runner needs only the owner connection. */
+export function parseMigrationEnv(raw: RawEnv): MigrationEnv {
+  return parseWith(migrationEnvSchema, raw);
+}
+
+/** Parses the process environment for the migration runner. */
+export function loadMigrationEnv(): MigrationEnv {
+  return parseMigrationEnv(process.env);
 }

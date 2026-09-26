@@ -5,13 +5,13 @@
   "type": "module",
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
+    "dev": "nest start --watch --env-file ../../.env",
     "start": "node dist/main.js",
     "lint": "eslint src test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --project unit",
     "test:e2e": "vitest run --project e2e",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "NODE_OPTIONS=--conditions=@ekaro/source drizzle-kit generate",
     "db:migrate": "node --env-file-if-exists=../../.env --import tsx src/infra/db/migrate.ts"
   },
   "dependencies": {

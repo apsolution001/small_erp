@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EnvValidationError, parseEnv, type RawEnv } from './env.js';
+import { EnvValidationError, parseEnv, parseMigrationEnv, type RawEnv } from './env.js';
 
 const valid: RawEnv = {
   NODE_ENV: 'development',
@@ -79,6 +79,14 @@ describe('parseEnv', () => {
     expect(error.message).toContain('  - REDIS_URL: ');
   });
 
+  it('says "is required" for a missing variable, whatever its type', () => {
+    const { REDIS_URL: _r, SMTP_PORT: _s, ...rest } = valid;
+    expect(errorOf(rest).issues).toEqual([
+      { variable: 'REDIS_URL', message: 'is required' },
+      { variable: 'SMTP_PORT', message: 'is required' },
+    ]);
+  });
+
   it('never echoes a rejected value into the message (it may be a secret)', () => {
     const error = errorOf({ ...valid, JWT_ACCESS_SECRET: 'short-secret-value' });
     expect(error.issues.map((i) => i.variable)).toEqual(['JWT_ACCESS_SECRET']);
@@ -105,5 +113,19 @@ describe('parseEnv', () => {
   it('rejects an unknown GSP provider and log level', () => {
     const error = errorOf({ ...valid, GSP_PROVIDER: 'acme', LOG_LEVEL: 'verbose' });
     expect(error.issues.map((i) => i.variable).sort()).toEqual(['GSP_PROVIDER', 'LOG_LEVEL']);
+  });
+});
+
+describe('parseMigrationEnv', () => {
+  it('needs only the owner URL', () => {
+    expect(parseMigrationEnv({ DATABASE_URL_OWNER: valid.DATABASE_URL_OWNER })).toEqual({
+      DATABASE_URL_OWNER: valid.DATABASE_URL_OWNER,
+    });
+  });
+
+  it('fails readably without it', () => {
+    expect(() => parseMigrationEnv({})).toThrow(
+      /Invalid environment configuration:\n {2}- DATABASE_URL_OWNER: /,
+    );
   });
 });
