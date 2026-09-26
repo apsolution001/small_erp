@@ -68,8 +68,8 @@ describe('migrations on an empty database', () => {
         where relnamespace = 'public'::regnamespace and relkind in ('r', 'p') and not relispartition`,
     );
     // tenants, audit_log, users, sessions, refresh_tokens, the nine T-104 tenant tables,
-    // T-105's invitations and outbox, and the four T-107 catalog tables.
-    expect(tables).toEqual([{ n: 20 }]);
+    // T-105's invitations and outbox, the four T-107 catalog tables and T-108's two party tables.
+    expect(tables).toEqual([{ n: 22 }]);
   });
 
   it('creates audit partitions for the current month and 12 months ahead', async () => {

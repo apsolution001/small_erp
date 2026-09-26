@@ -97,6 +97,14 @@ describe('partyCreateSchema', () => {
     ).toBe(true);
   });
 
+  it('defaults an absent GSTIN to null, so an unregistered party need not send it', () => {
+    const { gstin: _omit, ...withoutGstin } = regular;
+    expect(
+      partyCreateSchema.parse({ ...withoutGstin, gstRegistrationType: 'consumer' }).gstin,
+    ).toBeNull();
+    expect(pathsOf(partyCreateSchema.safeParse(withoutGstin))).toEqual(['gstin']);
+  });
+
   it('requires the GSTIN state to equal the default billing address state', () => {
     const karnatakaBilling = { ...billing, stateCode: '29', pincode: '560001', city: 'Bengaluru' };
     expect(

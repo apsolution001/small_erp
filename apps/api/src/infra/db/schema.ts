@@ -21,3 +21,5 @@ export * from '../../modules/masters/item-categories/item-categories.schema.js';
 export * from '../../modules/masters/items/items.schema.js';
 export * from '../../modules/masters/items/item-units.schema.js';
 export * from '../../modules/masters/items/item-tax-rates.schema.js';
+export * from '../../modules/masters/parties/parties.schema.js';
+export * from '../../modules/masters/parties/party-addresses.schema.js';

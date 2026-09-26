@@ -54,7 +54,7 @@ Run on 2026-09-26 against local Postgres 16 + Redis 7, test DB `ekaro_masters_te
 
 - `pnpm format`, `pnpm lint` (4/4), `pnpm typecheck` (4/4): clean.
 - `pnpm test`: core **127**, contracts **296** (100% statements/branches/functions/lines), web **1**, api **168** passed.
-- `pnpm --filter @ekaro/api test:e2e`: **16 files, 199 tests passed**, including:
+- `pnpm --filter @ekaro/api test:e2e`: **16 files, 199 tests passed** (re-verified after the T-104 fixes, T-105 and T-108: 25 files, 338 passed), including:
   - `masters/units.e2e-spec.ts` (16): seeded page 2 of 18 by code; q on code and name; LIKE wildcards literal; 422 for sort/unknown params/pageSize; create 201 with a normalised code; PATCH bumps the version; `active` filter; stale version 409; delete 204 then 404; audit INSERT/UPDATE/DELETE by the owner with versions; 422 for bad UQC, decimals, unknown keys, malformed id, missing version, version-only body; duplicate code 409 on create and update; 403/2xx per permission; API isolation.
   - `masters/tax-rates.e2e-spec.ts` (7): the 10 seeded slabs with exact `numeric(7,4)` strings; cess slab create/rename/deactivate/delete with audit; 422 when PATCH sends rates; trigger refuses a raw rate update; slab rules 422; duplicate 409 (`18.00` vs `18`); permissions; isolation.
   - `masters/item-categories.e2e-spec.ts` (10): 3-level tree; 4th level, cycle and too-deep move refused on `parentId`; flat pages by parent; inactive subtree hidden; duplicate name 409 case-insensitively; IN_USE with children; audit; stale version; permissions; isolation including a foreign parent.

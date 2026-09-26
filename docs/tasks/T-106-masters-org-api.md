@@ -57,7 +57,7 @@ Run on 2026-09-26 after merging `claude/brave-dirac-k9ikzp` (T-104 security fixe
 - `pnpm format`; `pnpm lint` 4/4; `pnpm typecheck` 4/4.
 - `pnpm test`: core **130** (100% statements and branches, including `seriesNumbersCollide`), contracts **300** (100%), web **1**, api **223** passed.
 - `db:migrate` on a fresh database: `migrations applied` (0000–0012).
-- `pnpm --filter @ekaro/api test:e2e`: **21 files, 251 tests passed**. New in this task:
+- `pnpm --filter @ekaro/api test:e2e`: **21 files, 251 tests passed**. New in this task: Re-verified after merging T-105 and adding T-108: 25 files, 338 tests passed.
   - `masters/company.e2e-spec.ts` (8): the seeded profile of each tenant; PATCH with audit; stale version; 422 for fields, merged GSTIN vs state and the unknown `logoObjectKey`; valuation change before postings; 409 `VALUATION_METHOD_LOCKED` and `BOOKS_BEGIN_DATE_LOCKED` with the fake posting engine switched on while other settings stay editable; moving the books a year earlier gives an item's rate history `[earlier, original]` with the same slab; permissions; isolation.
   - `masters/branches.e2e-spec.ts` (11): seeded HO; a Karnataka branch with the company PAN; 422 for a GSTIN of another state or PAN; duplicate code 409; merged state change 422; the head-office flag moves and back (both audited); 422 `HEAD_OFFICE_REQUIRED` for unset/deactivate/DELETE; 409 `BRANCH_HAS_ACTIVE_GODOWNS`, then deactivation once the godown is inactive; inactive branch cannot be HO; stale version; search/sort; permissions; isolation.
   - `masters/godowns.e2e-spec.ts` (6): seeded Main and branch filter; create, move, deactivate with an exact audit trail; active-branch rule on create and re-activation; 422/409 cases; permissions; a foreign branch is 422.

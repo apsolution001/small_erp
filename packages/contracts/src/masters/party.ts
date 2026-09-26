@@ -198,6 +198,8 @@ export type PartyResponse = z.infer<typeof partyResponseSchema>;
 export const partyCreateSchema = z
   .strictObject({
     ...partyFields,
+    // Unregistered, consumer and overseas parties have none (as on branches, absent means null).
+    gstin: partyFields.gstin.default(null),
     pan: partyFields.pan.default(null),
     creditLimit: partyFields.creditLimit.default(null),
     creditDays: partyFields.creditDays.default(null),

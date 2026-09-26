@@ -11,7 +11,14 @@ import { withAppConnection, withOwnerClient, withTenantConnection } from '../sup
 import { createTenant, type TestTenant } from '../support/masters.js';
 
 /** Every tenant table the masters tasks add (testing standard: isolation per tenant table). */
-const TENANT_TABLES = ['item_categories', 'items', 'item_units', 'item_tax_rates'] as const;
+const TENANT_TABLES = [
+  'item_categories',
+  'items',
+  'item_units',
+  'item_tax_rates',
+  'parties',
+  'party_addresses',
+] as const;
 
 /** Tables whose rows are history: ekaro_app may not update or delete them at all. */
 const APPEND_ONLY = new Set(['item_tax_rates']);
@@ -42,6 +49,24 @@ async function seedCatalog(tenant: TestTenant): Promise<void> {
         .expect(201)
     ).body,
   );
+  await tenant.client
+    .post('/parties', {
+      code: 'WALKIN',
+      name: 'Walk-in customer',
+      partyType: 'customer',
+      gstRegistrationType: 'consumer',
+      addresses: [
+        {
+          kind: 'billing',
+          line1: '12 MG Road',
+          city: 'Pune',
+          stateCode: '27',
+          pincode: '411001',
+          isDefault: true,
+        },
+      ],
+    })
+    .expect(201);
 }
 
 describe('tenant isolation of the masters tables on a raw ekaro_app connection', () => {

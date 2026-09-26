@@ -21,6 +21,9 @@ import { ItemsService } from './items/items.service.js';
 import { TaxRatesController } from './tax-rates/tax-rates.controller.js';
 import { TaxRatesRepository } from './tax-rates/tax-rates.repository.js';
 import { TaxRatesService } from './tax-rates/tax-rates.service.js';
+import { PartiesController } from './parties/parties.controller.js';
+import { PartiesRepository } from './parties/parties.repository.js';
+import { PartiesService } from './parties/parties.service.js';
 import { UnitsController } from './units/units.controller.js';
 import { UnitsRepository } from './units/units.repository.js';
 import { UnitsService } from './units/units.service.js';
@@ -40,6 +43,7 @@ import { UnitsService } from './units/units.service.js';
     TaxRatesController,
     ItemCategoriesController,
     ItemsController,
+    PartiesController,
   ],
   providers: [
     { provide: STOCK_POSTINGS, useClass: NoStockPostingsYet },
@@ -59,6 +63,8 @@ import { UnitsService } from './units/units.service.js';
     ItemCategoriesService,
     ItemsRepository,
     ItemsService,
+    PartiesRepository,
+    PartiesService,
   ],
   exports: [
     CompanyService,
@@ -69,6 +75,7 @@ import { UnitsService } from './units/units.service.js';
     TaxRatesService,
     ItemCategoriesService,
     ItemsService,
+    PartiesService,
   ],
 })
 export class MastersModule {}
