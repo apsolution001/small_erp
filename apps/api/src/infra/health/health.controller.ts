@@ -28,7 +28,7 @@ export class HealthController {
       const result = error.getResponse() as Partial<HealthCheckResult>;
       const failed = Object.keys(result.error ?? {}).join(', ');
       // Error details (hosts, driver messages) are logged by terminus, never returned.
-      throw new ServiceUnavailableError('HEALTH_CHECK_FAILED', `Unavailable: ${failed}.`, {
+      throw new ServiceUnavailableError('SERVICE_UNAVAILABLE', `Unavailable: ${failed}.`, {
         cause: error,
       });
     }

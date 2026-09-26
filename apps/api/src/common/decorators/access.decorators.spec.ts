@@ -1,6 +1,8 @@
+import { type Permission } from '@ekaro/contracts';
 import { Controller, Get } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { describe, expect, it } from 'vitest';
+import { Authenticated, isAuthenticatedOnlyRoute } from './authenticated.decorator.js';
 import { IS_PUBLIC_KEY, isPublicRoute, Public, type RouteHandler } from './public.decorator.js';
 import {
   REQUIRED_PERMISSIONS_KEY,
@@ -27,6 +29,13 @@ class ProbeController {
   @Get('inherited')
   inherited(): string {
     return 'inherited';
+  }
+
+  @Get('me')
+  // Justification (test fixture): exercises the authenticated-only metadata.
+  @Authenticated()
+  me(): string {
+    return 'me';
   }
 }
 
@@ -63,9 +72,19 @@ describe('@RequirePermission()', () => {
     ]);
   });
 
-  it('rejects a permission that is not <module>.<resource>:<action>', () => {
-    expect(() => RequirePermission('masters.item' as 'a.b:c')).toThrow(
+  it('rejects a string that is not in the contracts catalogue', () => {
+    expect(() => RequirePermission('masters.item' as Permission)).toThrow(
       /Invalid permission "masters.item"/,
     );
+    expect(() =>
+      RequirePermission('masters.item:view', 'masters.widget:view' as Permission),
+    ).toThrow(/Invalid permission "masters.widget:view"/);
+  });
+});
+
+describe('@Authenticated()', () => {
+  it('marks a handler as needing only a session', () => {
+    expect(isAuthenticatedOnlyRoute(reflector, handler('me'), ProbeController)).toBe(true);
+    expect(isAuthenticatedOnlyRoute(reflector, handler('edit'), ProbeController)).toBe(false);
   });
 });

@@ -40,7 +40,7 @@ describe('HealthController', () => {
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ServiceUnavailableError);
     expect(error).toMatchObject({
-      code: 'HEALTH_CHECK_FAILED',
+      code: 'SERVICE_UNAVAILABLE',
       message: 'Unavailable: redis.',
     });
   });

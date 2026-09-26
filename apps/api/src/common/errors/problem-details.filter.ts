@@ -1,4 +1,5 @@
 import { STATUS_CODES } from 'node:http';
+import { type ErrorCode, type Problem } from '@ekaro/contracts';
 import {
   type ArgumentsHost,
   Catch,
@@ -13,24 +14,21 @@ import { DomainError, type FieldError, ValidationError } from './domain-error.js
 export const PROBLEM_CONTENT_TYPE = 'application/problem+json';
 
 /**
- * RFC 9457 problem details. `type` is always `about:blank` (so `title` is the HTTP status
- * phrase); the machine-readable identity of the problem is the stable `code` extension.
+ * RFC 9457 problem details, as `problemSchema` in `@ekaro/contracts` describes them. `type` is
+ * always `about:blank` (so `title` is the HTTP status phrase); the machine-readable identity of
+ * the problem is the stable `code` extension.
  */
-export interface ProblemDetails {
+export interface ProblemDetails extends Problem {
   type: 'about:blank';
-  title: string;
-  status: number;
-  code: string;
   detail: string;
-  errors?: readonly FieldError[];
-  requestId?: string;
+  errors?: FieldError[];
 }
 
 const GENERIC_DETAIL = 'An unexpected error occurred.';
 const PG_UNIQUE_VIOLATION = '23505';
 
 /** Codes for framework-raised HTTP errors (unknown route, throttling, body too large...). */
-const HTTP_CODES: Readonly<Partial<Record<number, string>>> = {
+const HTTP_CODES: Readonly<Partial<Record<number, ErrorCode>>> = {
   [HttpStatus.BAD_REQUEST]: 'BAD_REQUEST',
   [HttpStatus.UNAUTHORIZED]: 'UNAUTHENTICATED',
   [HttpStatus.FORBIDDEN]: 'FORBIDDEN',
@@ -46,7 +44,7 @@ const HTTP_CODES: Readonly<Partial<Record<number, string>>> = {
 
 function problem(
   status: number,
-  code: string,
+  code: ErrorCode,
   detail: string,
   errors?: readonly FieldError[],
 ): ProblemDetails {
@@ -56,7 +54,7 @@ function problem(
     status,
     code,
     detail,
-    ...(errors === undefined ? {} : { errors }),
+    ...(errors === undefined ? {} : { errors: [...errors] }),
   };
 }
 
@@ -97,12 +95,13 @@ export function toProblemDetails(exception: unknown): ProblemDetails {
   if (exception instanceof HttpException) {
     const status = exception.getStatus();
     if (status >= 500) return problem(status, 'INTERNAL_ERROR', GENERIC_DETAIL);
-    return problem(status, HTTP_CODES[status] ?? `HTTP_${status}`, httpExceptionDetail(exception));
+    // Any other 4xx the framework raises is still a client error with a catalogue code.
+    return problem(status, HTTP_CODES[status] ?? 'BAD_REQUEST', httpExceptionDetail(exception));
   }
   if (pgErrorCode(exception) === PG_UNIQUE_VIOLATION) {
     return problem(
       HttpStatus.CONFLICT,
-      'DUPLICATE_RECORD',
+      'ALREADY_EXISTS',
       'A record with the same unique value already exists.',
     );
   }

@@ -1,7 +1,7 @@
 import { eq, is, SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { getTableConfig, PgDialect, text, unique } from 'drizzle-orm/pg-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { DB_CASING } from './casing.js';
 import { tenantTable } from './columns.js';
 
@@ -26,6 +26,13 @@ describe('tenantTable()', () => {
       'updatedBy',
       'version',
     ]);
+  });
+
+  it('exposes the standard columns in the table type (composite FKs reference them)', () => {
+    expectTypeOf(widgets).toHaveProperty('id');
+    expectTypeOf(widgets).toHaveProperty('tenantId');
+    expectTypeOf(widgets).toHaveProperty('version');
+    expect(getTableConfig(widgets).columns).toContain(widgets.tenantId);
   });
 
   it('references tenants(id) and keeps extra config', () => {

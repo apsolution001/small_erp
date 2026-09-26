@@ -1,3 +1,4 @@
+import { problemSchema } from '@ekaro/contracts';
 import { Body, Controller, Get, Module, Post } from '@nestjs/common';
 import { type NestExpressApplication } from '@nestjs/platform-express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -156,6 +157,23 @@ describe('HTTP pipeline', () => {
         requestId: res.headers['x-request-id']!,
       });
       expect(JSON.stringify(res.body)).not.toContain('10.1.2.3');
+    });
+
+    it('produces bodies that satisfy the contracts problemSchema', async () => {
+      const responses = await Promise.all([
+        http(app).post('/api/v1/pipeline-probe').send({ name: '' }),
+        http(app)
+          .post('/api/v1/pipeline-probe')
+          .set('Content-Type', 'application/json')
+          .send('{"name": '),
+        http(app).get('/api/v1/pipeline-probe/conflict'),
+        http(app).get('/api/v1/nope'),
+        http(app).get('/api/v1/pipeline-probe/crash'),
+      ]);
+      expect(responses.map((r) => r.status)).toEqual([400, 400, 409, 404, 500]);
+      for (const res of responses) {
+        expect(problemSchema.parse(res.body)).toEqual(res.body);
+      }
     });
   });
 });

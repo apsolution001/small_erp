@@ -12,8 +12,8 @@ export const IS_PUBLIC_KEY = 'ekaro:isPublic';
 export type RouteHandler = ReturnType<ExecutionContext['getHandler']>;
 
 /**
- * Opts a route out of authentication (the global JWT guard lands in T-104). Allowed only for
- * signup, login, refresh, health and similar, and every use needs a justification comment.
+ * Opts a route out of authentication (the global `JwtAuthGuard` and `PermissionGuard`). Allowed
+ * only for signup, login, refresh, health and similar, and every use needs a justification comment.
  */
 export const Public = (): CustomDecorator => SetMetadata(IS_PUBLIC_KEY, true);
 

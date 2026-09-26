@@ -1,6 +1,6 @@
 import { uuidv7 } from '@ekaro/core';
 import { sql } from 'drizzle-orm';
-import { timestamp, uuid } from 'drizzle-orm/pg-core';
+import { customType, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 /**
  * Column builders shared by platform and tenant tables. Kept apart from `columns.ts`
@@ -26,4 +26,9 @@ export const updatedAt = () =>
 export const timestamps = () => ({
   createdAt: timestamptz().notNull().defaultNow(),
   updatedAt: updatedAt(),
+});
+
+/** Case-insensitive text (`citext` extension, migration 0000): emails. */
+export const citext = customType<{ data: string }>({
+  dataType: () => 'citext',
 });

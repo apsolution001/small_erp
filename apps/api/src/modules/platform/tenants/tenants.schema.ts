@@ -1,13 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { check, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { primaryId, timestamps } from '../../../infra/db/base-columns.js';
+import { inList } from '../../../infra/db/checks.js';
 
 /** Tenant lifecycle (spec 01 §1). Mirrored by a Zod enum in `@ekaro/contracts`. */
 export const TENANT_STATUSES = ['trial', 'active', 'suspended', 'closed'] as const;
 /** Subscription plan (BRD §12); a trial gets growth features. */
 export const TENANT_PLANS = ['starter', 'growth', 'pro'] as const;
-
-const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(', '));
 
 /**
  * Platform table (no `tenant_id`): read and written through the `ekaro_platform` connection.
@@ -29,8 +28,8 @@ export const tenants = pgTable(
       'tenants_slug_format',
       sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and length(${t.slug}) <= 63`,
     ),
-    check('tenants_status_valid', sql`${t.status} in (${inList(TENANT_STATUSES)})`),
-    check('tenants_plan_valid', sql`${t.plan} in (${inList(TENANT_PLANS)})`),
+    check('tenants_status_valid', inList(t.status, TENANT_STATUSES)),
+    check('tenants_plan_valid', inList(t.plan, TENANT_PLANS)),
     check('tenants_trial_has_end', sql`${t.status} <> 'trial' or ${t.trialEndsAt} is not null`),
   ],
 );

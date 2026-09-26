@@ -1,15 +1,16 @@
+import { type ErrorCode } from '@ekaro/contracts';
 import { type z } from 'zod';
 
 /**
- * Errors the application throws on purpose. Each carries a stable SCREAMING_SNAKE `code`
- * (the web maps codes to messages) and a client-safe `message` (rendered as `detail`).
+ * Errors the application throws on purpose. Each carries a stable `code` from the contracts
+ * catalogue (the web maps codes to messages) and a client-safe `message` (rendered as `detail`).
  * `ProblemDetailsFilter` renders them as RFC 9457 problem+json.
  */
 export abstract class DomainError extends Error {
   abstract readonly status: number;
 
   constructor(
-    readonly code: string,
+    readonly code: ErrorCode,
     message: string,
     options?: ErrorOptions,
   ) {

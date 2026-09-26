@@ -1,8 +1,9 @@
-import { type BuildExtraConfigColumns, sql } from 'drizzle-orm';
+import { type BuildColumns, type BuildExtraConfigColumns, sql } from 'drizzle-orm';
 import {
   integer,
   type PgColumnBuilderBase,
   type PgTableExtraConfigValue,
+  type PgTableWithColumns,
   pgTable,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -12,6 +13,16 @@ import { primaryId, timestamptz, updatedAt } from './base-columns.js';
 export { primaryId, timestamps, timestamptz } from './base-columns.js';
 
 /**
+ * `tenant_id uuid not null default app_current_tenant() references tenants(id)`. For tenant tables
+ * whose key is not a plain `id` (a per-tenant singleton, a link table); others use {@link tenantTable}.
+ */
+export const tenantIdColumn = () =>
+  uuid()
+    .notNull()
+    .default(sql`app_current_tenant()`)
+    .references(() => tenants.id);
+
+/**
  * Columns every tenant-owned table starts with (docs/standards/database.md).
  * `tenant_id`, `created_by` and `updated_by` default to the transaction context
  * (`app_current_tenant()` / `app_current_user()`), so repositories never pass them and the
@@ -19,13 +30,11 @@ export { primaryId, timestamps, timestamptz } from './base-columns.js';
  */
 const tenantKeyColumns = () => ({
   id: primaryId(),
-  tenantId: uuid()
-    .notNull()
-    .default(sql`app_current_tenant()`)
-    .references(() => tenants.id),
+  tenantId: tenantIdColumn(),
 });
 
-const tenantAuditColumns = () => ({
+/** `created_*`, `updated_*` (actor from the transaction context) and `version`. */
+export const tenantAuditColumns = () => ({
   createdAt: timestamptz().notNull().defaultNow(),
   createdBy: uuid().default(sql`app_current_user()`),
   updatedAt: updatedAt(),
@@ -42,6 +51,17 @@ export type TenantColumns = ReturnType<typeof tenantKeyColumns> &
 /** Business columns may not redefine the standard ones. */
 type BusinessColumns<T> = T & { [K in keyof TenantColumns]?: never };
 
+/** The table type `pgTable` would give the standard columns plus the business columns. */
+export type TenantTable<
+  TName extends string,
+  TColumns extends Record<string, PgColumnBuilderBase>,
+> = PgTableWithColumns<{
+  name: TName;
+  schema: undefined;
+  columns: BuildColumns<TName, TenantColumns & TColumns, 'pg'>;
+  dialect: 'pg';
+}>;
+
 /**
  * `pgTable` for a tenant-owned table: `id`, `tenant_id`, your columns, then the audit columns
  * and `version`. Its migration must also run `select app_enable_tenant_table('<name>')`
@@ -56,6 +76,14 @@ export function tenantTable<
   extraConfig?: (
     self: BuildExtraConfigColumns<TName, TenantColumns & TColumns, 'pg'>,
   ) => PgTableExtraConfigValue[],
-) {
-  return pgTable(name, { ...tenantKeyColumns(), ...columns, ...tenantAuditColumns() }, extraConfig);
+): TenantTable<TName, TColumns> {
+  // Stated explicitly: inferred from the spread, the `never` guard above would erase the standard
+  // columns from the table's type (the runtime table always had them).
+  const business: TColumns = columns;
+  const all: TenantColumns & TColumns = {
+    ...tenantKeyColumns(),
+    ...business,
+    ...tenantAuditColumns(),
+  };
+  return pgTable(name, all, extraConfig);
 }

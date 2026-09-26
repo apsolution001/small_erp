@@ -1,4 +1,5 @@
 import { type ArgumentsHost, HttpException, Logger, NotFoundException } from '@nestjs/common';
+import { problemSchema } from '@ekaro/contracts';
 import { ThrottlerException } from '@nestjs/throttler';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -59,14 +60,14 @@ describe('toProblemDetails', () => {
   it.each([
     [new UnauthorizedError('UNAUTHENTICATED', 'Sign in required.'), 401, 'Unauthorized'],
     [new ForbiddenError('FORBIDDEN', 'Missing permission masters.item:edit.'), 403, 'Forbidden'],
-    [new NotFoundError('ITEM_NOT_FOUND', 'Item not found.'), 404, 'Not Found'],
+    [new NotFoundError('NOT_FOUND', 'Item not found.'), 404, 'Not Found'],
     [new ConflictError('EMAIL_TAKEN', 'This email is already registered.'), 409, 'Conflict'],
     [
       new BusinessRuleError('CREDIT_LIMIT_EXCEEDED', 'Credit limit exceeded.'),
       422,
       'Unprocessable Entity',
     ],
-    [new ServiceUnavailableError('DEPENDENCY_DOWN', 'redis'), 503, 'Service Unavailable'],
+    [new ServiceUnavailableError('SERVICE_UNAVAILABLE', 'redis'), 503, 'Service Unavailable'],
   ])('maps %o to its status, title, code and detail', (error, status, title) => {
     expect(toProblemDetails(error)).toEqual({
       type: 'about:blank',
@@ -121,7 +122,7 @@ describe('toProblemDetails', () => {
     });
     expect(toProblemDetails(new HttpException('teapot', 418))).toMatchObject({
       status: 418,
-      code: 'HTTP_418',
+      code: 'BAD_REQUEST',
       detail: 'teapot',
     });
   });
@@ -152,7 +153,7 @@ describe('toProblemDetails', () => {
       type: 'about:blank',
       title: 'Conflict',
       status: 409,
-      code: 'DUPLICATE_RECORD',
+      code: 'ALREADY_EXISTS',
       detail: 'A record with the same unique value already exists.',
     });
   });
@@ -167,19 +168,36 @@ describe('toProblemDetails', () => {
     });
     expect(toProblemDetails('a thrown string')).toMatchObject({ status: 500 });
   });
+
+  it('always produces a body that satisfies the contracts problemSchema', () => {
+    const samples: unknown[] = [
+      new ValidationError([{ path: 'email', message: 'Invalid email', code: 'invalid_format' }]),
+      new ConflictError('EMAIL_TAKEN', 'This email is already registered.'),
+      new NotFoundException(),
+      new ThrottlerException(),
+      new HttpException('teapot', 418),
+      new HttpException('bad gateway', 502),
+      Object.assign(new Error('dup'), { code: '23505', severity: 'ERROR' }),
+      new TypeError('boom'),
+    ];
+    for (const sample of samples) {
+      const body = toProblemDetails(sample);
+      expect(problemSchema.parse(body)).toEqual(body);
+    }
+  });
 });
 
 describe('ProblemDetailsFilter', () => {
   it('writes application/problem+json with the request id', () => {
     const { host, captured } = httpHost({ requestId: 'req-123' });
-    new ProblemDetailsFilter().catch(new NotFoundError('ITEM_NOT_FOUND', 'Item not found.'), host);
+    new ProblemDetailsFilter().catch(new NotFoundError('NOT_FOUND', 'Item not found.'), host);
     expect(captured.status).toBe(404);
     expect(captured.headers['content-type']).toBe(`${PROBLEM_CONTENT_TYPE}; charset=utf-8`);
     expect(captured.body).toEqual({
       type: 'about:blank',
       title: 'Not Found',
       status: 404,
-      code: 'ITEM_NOT_FOUND',
+      code: 'NOT_FOUND',
       detail: 'Item not found.',
       requestId: 'req-123',
     });
@@ -189,7 +207,7 @@ describe('ProblemDetailsFilter', () => {
     const logError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const boom = new Error('boom');
 
-    new ProblemDetailsFilter().catch(new ConflictError('X', 'y'), httpHost().host);
+    new ProblemDetailsFilter().catch(new ConflictError('CONFLICT', 'y'), httpHost().host);
     expect(logError).not.toHaveBeenCalled();
 
     const { host, captured } = httpHost();
