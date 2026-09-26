@@ -165,9 +165,11 @@ describe('route access declarations of the real app', () => {
     const all = routes();
     expect(all.filter((r) => r.access === 'NONE')).toEqual([]);
     expect(all.filter((r) => r.access !== 'NONE' && !r.access.includes('.'))).toEqual([
+      { route: 'AuthController.acceptInvitation', access: 'public' },
       { route: 'AuthController.login', access: 'public' },
       { route: 'AuthController.logout', access: 'public' },
       { route: 'AuthController.me', access: 'authenticated' },
+      { route: 'AuthController.previewInvitation', access: 'public' },
       { route: 'AuthController.refresh', access: 'public' },
       { route: 'AuthController.selectTenant', access: 'public' },
       { route: 'AuthController.signup', access: 'public' },

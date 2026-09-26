@@ -5,6 +5,7 @@ import { AccessModule } from '../access/index.js';
 import { PlatformModule } from '../platform/index.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { InvitationAcceptanceService } from './invitations/invitation-acceptance.service.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { PasswordHasher } from './passwords/password-hasher.js';
 import { SessionAccessLoader } from './sessions/session-access.loader.js';
@@ -18,6 +19,7 @@ import { UsersRepository } from './users/users.repository.js';
   controllers: [AuthController],
   providers: [
     AuthService,
+    InvitationAcceptanceService,
     AccessTokenService,
     JwtAuthGuard,
     PasswordHasher,

@@ -3,6 +3,12 @@ export { type AccessSnapshot, AccessCache } from './access-cache.js';
 export { AccessModule } from './access.module.js';
 export { ensureOwnerMembership, seedSystemRoles } from './access.seed.js';
 export {
+  acceptInvitation,
+  assertAcceptable,
+  findInvitationByTokenHash,
+  type InvitationForAcceptance,
+} from './invitations/invitation-acceptance.js';
+export {
   findActiveMembershipsOfUser,
   loadMembershipAccess,
   type MembershipAccess,

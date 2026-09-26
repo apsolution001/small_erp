@@ -36,6 +36,20 @@
       "when": 1790402767680,
       "tag": "0004_auth_access_masters_security",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790404478023,
+      "tag": "0005_t105_invitations_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790404498147,
+      "tag": "0006_t105_users_roles_audit_security",
+      "breakpoints": true
     }
   ]
 }

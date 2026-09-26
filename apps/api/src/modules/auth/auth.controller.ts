@@ -1,4 +1,10 @@
 import {
+  type AcceptInvitation,
+  type AcceptInvitationResponse,
+  acceptInvitationSchema,
+  type InvitationPreview,
+  type InvitationToken,
+  invitationTokenSchema,
   type Login,
   type LoginResponse,
   loginSchema,
@@ -31,9 +37,11 @@ import { UnauthorizedError } from '../../common/errors/domain-error.js';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import { type Env } from '../../config/env.js';
 import { InjectEnv } from '../../config/env.module.js';
+import { currentPrincipal } from '../../infra/tenancy/current-principal.js';
 import { AuthThrottles } from '../../infra/throttling/throttling.module.js';
 import { type Principal, type RequestContext } from '../../infra/tenancy/request-context.js';
 import { AuthService, type SessionGrant } from './auth.service.js';
+import { InvitationAcceptanceService } from './invitations/invitation-acceptance.service.js';
 import {
   clearRefreshCookie,
   readRefreshCookie,
@@ -53,6 +61,7 @@ const USER_AGENT_MAX = 512;
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly invitations: InvitationAcceptanceService,
     private readonly cls: ClsService<RequestContext>,
     @InjectEnv() private readonly env: Env,
   ) {}
@@ -136,6 +145,26 @@ export class AuthController {
     return this.respond(res, grant);
   }
 
+  @Post('invitations/preview')
+  @HttpCode(HttpStatus.OK)
+  // Justification: the invitee has no session yet; the 256-bit token in the body is the credential.
+  @Public()
+  previewInvitation(
+    @Body(new ZodValidationPipe(invitationTokenSchema)) body: InvitationToken,
+  ): Promise<InvitationPreview> {
+    return this.invitations.preview(body.token);
+  }
+
+  @Post('accept-invitation')
+  @HttpCode(HttpStatus.OK)
+  // Justification: the invitee has no session yet; the 256-bit token in the body is the credential.
+  @Public()
+  acceptInvitation(
+    @Body(new ZodValidationPipe(acceptInvitationSchema)) body: AcceptInvitation,
+  ): Promise<AcceptInvitationResponse> {
+    return this.invitations.accept(body);
+  }
+
   @Get('me')
   // Justification: every signed-in user may read their own session and permissions.
   @Authenticated()
@@ -149,10 +178,7 @@ export class AuthController {
   }
 
   private principal(): Principal {
-    const principal = this.cls.get('principal');
-    if (principal === undefined)
-      throw new UnauthorizedError('UNAUTHENTICATED', 'Sign in to continue.');
-    return principal;
+    return currentPrincipal(this.cls);
   }
 }
 
