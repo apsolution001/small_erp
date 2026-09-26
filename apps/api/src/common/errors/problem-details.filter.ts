@@ -9,6 +9,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { isUniqueViolation } from '../../infra/db/pg-errors.js';
 import { DomainError, type FieldError, ValidationError } from './domain-error.js';
 
 export const PROBLEM_CONTENT_TYPE = 'application/problem+json';
@@ -25,7 +26,6 @@ export interface ProblemDetails extends Problem {
 }
 
 const GENERIC_DETAIL = 'An unexpected error occurred.';
-const PG_UNIQUE_VIOLATION = '23505';
 
 /** Codes for framework-raised HTTP errors (unknown route, throttling, body too large...). */
 const HTTP_CODES: Readonly<Partial<Record<number, ErrorCode>>> = {
@@ -67,19 +67,6 @@ function httpExceptionDetail(exception: HttpException): string {
   return exception.message;
 }
 
-/** Finds a Postgres SQLSTATE on the error or its `cause` chain (Drizzle wraps driver errors). */
-function pgErrorCode(error: unknown): string | undefined {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
-    const candidate = current as Error & { code?: unknown; severity?: unknown };
-    if (typeof candidate.code === 'string' && typeof candidate.severity === 'string') {
-      return candidate.code;
-    }
-    current = candidate.cause;
-  }
-  return undefined;
-}
-
 /** Maps anything thrown to a client-safe problem. Pure: no logging, no I/O. */
 export function toProblemDetails(exception: unknown): ProblemDetails {
   if (exception instanceof ValidationError) {
@@ -98,7 +85,7 @@ export function toProblemDetails(exception: unknown): ProblemDetails {
     // Any other 4xx the framework raises is still a client error with a catalogue code.
     return problem(status, HTTP_CODES[status] ?? 'BAD_REQUEST', httpExceptionDetail(exception));
   }
-  if (pgErrorCode(exception) === PG_UNIQUE_VIOLATION) {
+  if (isUniqueViolation(exception)) {
     return problem(
       HttpStatus.CONFLICT,
       'ALREADY_EXISTS',

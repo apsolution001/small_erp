@@ -69,6 +69,11 @@ export class ConflictError extends DomainError {
   readonly status = 409;
 }
 
+/** 423: the resource is locked for now (an account after repeated failed logins). */
+export class LockedError extends DomainError {
+  readonly status = 423;
+}
+
 /** 422: the input is well-formed but violates a business rule. */
 export class BusinessRuleError extends DomainError {
   readonly status = 422;

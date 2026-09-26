@@ -7,6 +7,7 @@ import {
   BusinessRuleError,
   ConflictError,
   ForbiddenError,
+  LockedError,
   NotFoundError,
   ServiceUnavailableError,
   UnauthorizedError,
@@ -61,6 +62,7 @@ describe('toProblemDetails', () => {
     [new UnauthorizedError('UNAUTHENTICATED', 'Sign in required.'), 401, 'Unauthorized'],
     [new ForbiddenError('FORBIDDEN', 'Missing permission masters.item:edit.'), 403, 'Forbidden'],
     [new NotFoundError('NOT_FOUND', 'Item not found.'), 404, 'Not Found'],
+    [new LockedError('ACCOUNT_LOCKED', 'Try again in 15 minutes.'), 423, 'Locked'],
     [new ConflictError('EMAIL_TAKEN', 'This email is already registered.'), 409, 'Conflict'],
     [
       new BusinessRuleError('CREDIT_LIMIT_EXCEEDED', 'Credit limit exceeded.'),
